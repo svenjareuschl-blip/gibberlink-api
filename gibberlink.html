@@ -277,7 +277,30 @@ function toggleRevLang(){
   if(txt) document.getElementById('rev-output').textContent=reverseTranslate(txt);
 }
 
+const DE_TO_EN={
+  'ich':'I','du':'you','er':'he','sie':'she','es':'it','wir':'we','ihr':'they',
+  'mein':'my','dein':'your','sein':'his','unser':'our','euer':'your',
+  'der':'the','die':'the','das':'the','ein':'a','eine':'a','dieser':'this','jener':'that',
+  'sein':'be','haben':'have','werden':'will','können':'can','müssen':'must',
+  'sollen':'shall','wollen':'want','dürfen':'may','mögen':'like',
+  'machen':'make','gehen':'go','kommen':'come','sehen':'see','wissen':'know',
+  'denken':'think','sagen':'say','geben':'give','nehmen':'take',
+  'gut':'good','schlecht':'bad','groß':'big','klein':'small','lang':'long',
+  'kurz':'short','alt':'old','neu':'new','jung':'young','schnell':'fast',
+  'langsam':'slow','laut':'loud','leise':'quiet','warm':'warm','kalt':'cold',
+  'stark':'strong','schwach':'weak','nicht':'not','und':'and','oder':'or',
+  'aber':'but','wenn':'if','weil':'because','dass':'that','auch':'also',
+  'noch':'still','schon':'already','jetzt':'now','hier':'here','dort':'there',
+  'alle':'all','viel':'much','mehr':'more','wenig':'few','immer':'always',
+  'nie':'never','ja':'yes','nein':'no','mensch':'person','kind':'child',
+  'frau':'woman','mann':'man','haus':'house','welt':'world','land':'country',
+  'wasser':'water','feuer':'fire','luft':'air','erde':'earth','licht':'light',
+  'dunkel':'dark','tag':'day','nacht':'night','zeit':'time','jahr':'year',
+  'weg':'way','ort':'place','sprache':'language','wort':'word','name':'name',
+  'zahl':'number','ding':'thing','tod':'death','leben':'life'
+};
 function bestEnglish(deWord){
+  if(DE_TO_EN[deWord]) return DE_TO_EN[deWord];
   let best=null;
   for(const [alias,canonical] of Object.entries(ALIASES)){
     if(canonical===deWord && /^[a-z]+$/.test(alias)){
