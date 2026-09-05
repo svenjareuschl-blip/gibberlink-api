@@ -1,19 +1,12 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 import pg8000.dbapi
 import urllib.parse
 import os
 import random
 
-app = FastAPI(title="Gibberlink Dictionary API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = Flask(__name__)
+CORS(app)
 
 # ── Datenbankverbindung ───────────────────────────────────────────────────────
 def get_db():
@@ -46,8 +39,7 @@ def init_db():
     cur.close()
     conn.close()
 
-@app.on_event("startup")
-async def startup():
+with app.app_context():
     init_db()
 
 # ── GL-Wort-Erzeugung ─────────────────────────────────────────────────────────
@@ -66,6 +58,10 @@ def generate_gl_word(original: str, attempt: int = 0) -> str:
     return word
 
 # ── Endpunkte ─────────────────────────────────────────────────────────────────
+@app.get("/health")
+def health():
+    return jsonify({"ok": True})
+
 @app.get("/dict")
 def get_dict():
     conn = get_db()
@@ -74,27 +70,25 @@ def get_dict():
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    return [{"original": r[0], "lang": r[1], "gl": r[2]} for r in rows]
-
-class AddRequest(BaseModel):
-    original: str
-    lang: str = "en"
+    return jsonify([{"original": r[0], "lang": r[1], "gl": r[2]} for r in rows])
 
 @app.post("/add")
-def add_word(req: AddRequest):
-    orig = req.original.strip()
+def add_word():
+    data = request.get_json(force=True)
+    orig = (data.get("original") or "").strip()
+    lang = (data.get("lang") or "en").strip()
     lower = orig.lower()
     if not lower:
-        raise HTTPException(400, "empty word")
+        return jsonify({"error": "empty word"}), 400
 
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute("SELECT gl_word FROM words WHERE orig_lower=%s AND lang=%s", (lower, req.lang))
+    cur.execute("SELECT gl_word FROM words WHERE orig_lower=%s AND lang=%s", (lower, lang))
     row = cur.fetchone()
     if row:
         cur.close(); conn.close()
-        return {"gl": row[0], "original": orig, "new": False}
+        return jsonify({"gl": row[0], "original": orig, "new": False})
 
     attempt = 0
     while True:
@@ -106,23 +100,22 @@ def add_word(req: AddRequest):
 
     cur.execute(
         "INSERT INTO words (original, lang, gl_word, orig_lower) VALUES (%s,%s,%s,%s)",
-        (orig, req.lang, gl, lower)
+        (orig, lang, gl, lower)
     )
     conn.commit()
     cur.close(); conn.close()
-    return {"gl": gl, "original": orig, "new": True}
+    return jsonify({"gl": gl, "original": orig, "new": True})
 
 @app.get("/reverse")
-def reverse_lookup(gl: str):
+def reverse_lookup():
+    gl = (request.args.get("gl") or "").lower().strip()
+    if not gl:
+        return jsonify({"error": "missing gl"}), 400
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT original, lang FROM words WHERE gl_word=%s", (gl.lower().strip(),))
+    cur.execute("SELECT original, lang FROM words WHERE gl_word=%s", (gl,))
     row = cur.fetchone()
     cur.close(); conn.close()
     if not row:
-        raise HTTPException(404, "not found")
-    return {"original": row[0], "lang": row[1], "gl": gl}
-
-@app.get("/health")
-def health():
-    return {"ok": True}
+        return jsonify({"error": "not found"}), 404
+    return jsonify({"original": row[0], "lang": row[1], "gl": gl})
