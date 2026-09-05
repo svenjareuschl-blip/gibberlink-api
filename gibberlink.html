@@ -99,6 +99,7 @@ input[type=range]{width:100%;accent-color:#58a6ff;cursor:pointer;height:4px}
     <button class="btn-play"    onclick="doPlay()">▶ Anhören</button>
     <button class="btn-dl"      onclick="doDownload()">⬇ WAV</button>
     <button class="btn-secondary" onclick="doClear()">Löschen</button>
+    <button id="btn-mic" class="btn-secondary" onclick="toggleSpeech()" title="Spracheingabe">🎤</button>
   </div>
   <div class="result" id="output" style="margin-top:.8rem">—</div>
   <div class="info" id="info"></div>
@@ -515,6 +516,39 @@ function doClear(){
   document.getElementById('output').textContent='—';
   document.getElementById('info').textContent='';
   _lastGl='';
+}
+
+let _recognition=null, _recActive=false;
+function toggleSpeech(){
+  const btn=document.getElementById('btn-mic');
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ alert('Speech Recognition wird von diesem Browser nicht unterstützt.'); return; }
+  if(_recActive){
+    _recognition&&_recognition.stop();
+    return;
+  }
+  _recognition=new SR();
+  _recognition.continuous=false;
+  _recognition.interimResults=false;
+  _recognition.lang=navigator.language||'de-DE';
+  _recognition.onstart=()=>{
+    _recActive=true;
+    btn.textContent='⏹'; btn.className='btn-primary';
+    document.getElementById('info').textContent='🎤 Aufnahme läuft…';
+  };
+  _recognition.onresult=e=>{
+    const text=e.results[0][0].transcript;
+    document.getElementById('input').value=text;
+    doTranslate();
+  };
+  _recognition.onerror=e=>{
+    document.getElementById('info').textContent='✗ Mikrofon: '+e.error;
+  };
+  _recognition.onend=()=>{
+    _recActive=false;
+    btn.textContent='🎤'; btn.className='btn-secondary';
+  };
+  _recognition.start();
 }
 
 async function doReverse(){
