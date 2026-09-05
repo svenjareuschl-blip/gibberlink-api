@@ -347,9 +347,9 @@ function sliders(){
   };
 }
 
-function playGl(glText){
+async function playGl(glText){
   const ctx=getCtx();
-  if(ctx.state==='suspended') ctx.resume();
+  if(ctx.state!=='running') await ctx.resume();
   const {tempo,vibrato,porta,timbre}=sliders();
 
   // Alle Phoneme sammeln (inkl. Silencen für Wortgrenzen)
