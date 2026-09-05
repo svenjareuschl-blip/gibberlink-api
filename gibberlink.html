@@ -176,10 +176,10 @@ const NEG_WORDS = new Set(['nicht','kein','keine','keiner','keinen','not']);
 const PAST_HELPERS = new Set(['war','hatte','wurde','ging','kam','sah','machte','sagte','hörte','lief','was','were','had','went','came','saw','made','did','said','ran','spoke','heard','wrote','ate','drank','slept','thought','gave','took','stood','built','bought','found','brought']);
 const VERBS = new Set(['sein','haben','werden','können','müssen','sollen','wollen','dürfen','mögen','machen','gehen','kommen','sehen','wissen','denken','sagen','geben','nehmen','stehen','laufen','sprechen','hören','lesen','schreiben','essen','trinken','schlafen','leben','sterben','lieben','hassen','arbeiten','lernen','bauen','kaufen','spielen','fragen','helfen','finden','suchen','bringen','bleiben','fahren','singen','warten','beginnen','be','have','do','go','come','see','know','think','say','give','take','stand','run','speak','hear','read','write','eat','drink','sleep','live','die','love','hate','work','learn','build','buy','sell','play','ask','help','find','bring','stay','show','need','fly','drive','swim','sing','wait','begin','start','make','want','like']);
 
-// Wenn die App direkt von Railway serviert wird → relative Pfade, sonst absolute URL
+// Wenn von Railway selbst serviert → gleiche Origin nutzen (relative Pfade), sonst absolute URL
 const API_URL = window.location.hostname === 'investment-broker.local'
   ? 'https://gibberlink-api-production.up.railway.app'
-  : '';
+  : window.location.origin;
 
 // Community-Wörterbuch (vom Server geladen)
 const COMMUNITY_DICT = {};   // original_lower → gl
