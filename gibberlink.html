@@ -553,7 +553,7 @@ function toggleSpeech(){
   }
   _recognition=new SR();
   _recognition.continuous=false;
-  _recognition.interimResults=false;
+  _recognition.interimResults=true;
   _recognition.lang=navigator.language||'de-DE';
   _recognition.onstart=()=>{
     _recActive=true;
@@ -562,11 +562,16 @@ function toggleSpeech(){
   };
   let _gotResult=false, _hadError=false;
   _recognition.onresult=e=>{
-    const text=((e.results[0]||[])[0]||{}).transcript||'';
-    if(!text.trim()) return;
-    _gotResult=true;
-    document.getElementById('input').value=text.trim();
-    doTranslate();
+    for(let i=0;i<e.results.length;i++){
+      if(e.results[i].isFinal){
+        const text=e.results[i][0].transcript.trim();
+        if(!text) continue;
+        _gotResult=true;
+        document.getElementById('input').value=text;
+        doTranslate();
+        return;
+      }
+    }
   };
   _recognition.onerror=e=>{
     _hadError=true;
