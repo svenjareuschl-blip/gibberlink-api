@@ -140,6 +140,23 @@ input[type=range]{width:100%;accent-color:#58a6ff;cursor:pointer;height:4px}
   </div>
 </div>
 
+<!-- Phonem Live -->
+<div class="card">
+  <h2>🔊 Gibberlink Live — Senden & Empfangen</h2>
+  <p style="font-size:.8rem;color:#8b949e;margin-bottom:.9rem;line-height:1.6">Spiele den GL-Klang über den Lautsprecher — ein anderes Gerät in der Nähe erkennt die Töne und übersetzt zurück. <span style="color:#484f58">Ruhige Umgebung empfohlen. HTTPS für Empfangen nötig.</span></p>
+  <div class="btn-row">
+    <button class="btn-play" onclick="doPhonSend()">🔊 Senden</button>
+    <button id="btn-phon-recv" class="btn-secondary" onclick="togglePhonReceive()">🎙 Empfangen</button>
+  </div>
+  <div class="info" id="phon-status" style="margin-top:.6rem;font-size:.78rem;color:#8b949e"></div>
+  <div id="phon-recv-panel" style="display:none;margin-top:.8rem">
+    <div style="font-size:.75rem;color:#8b949e;margin-bottom:.3rem">Empfangen (GL):</div>
+    <div class="result" id="phon-gl">—</div>
+    <div style="font-size:.75rem;color:#8b949e;margin:.5rem 0 .3rem">Rückübersetzung:</div>
+    <div class="result reverse" id="phon-de">—</div>
+  </div>
+</div>
+
 <!-- GGwave -->
 <div class="card">
   <h2>📡 GGwave Live-Übertragung</h2>
@@ -819,6 +836,94 @@ window.addEventListener('load', ()=>{
     }
   }, 1500);
 });
+
+// ═══════════════════════════════════════════════════════════
+// PHONEM LIVE — Echtzeit Senden & Empfangen
+// ═══════════════════════════════════════════════════════════
+function goertzelMag(samples, freq, sr){
+  const N=samples.length;
+  const k=Math.round(N*freq/sr);
+  const w=2*Math.PI*k/N;
+  const c=2*Math.cos(w);
+  let q1=0,q2=0;
+  for(let i=0;i<N;i++){const q=c*q1-q2+samples[i];q2=q1;q1=q;}
+  return Math.sqrt(Math.max(0,q1*q1+q2*q2-q1*q2*c));
+}
+
+function detectBestPhoneme(samples, sr){
+  const rms=Math.sqrt(samples.reduce((s,x)=>s+x*x,0)/samples.length);
+  if(rms<0.015) return null;
+  const all={...VOWEL_FREQ,...CONS_FREQ};
+  let maxM=0, best=null;
+  for(const [ch,freq] of Object.entries(all)){
+    const m=goertzelMag(samples,freq,sr);
+    if(m>maxM){maxM=m;best=ch;}
+  }
+  return best;
+}
+
+let _phonRecv=false,_phonProc=null,_phonStream=null;
+let _prevPhon=null,_phonWord='',_phonText='',_silFrames=0;
+
+function doPhonSend(){
+  if(!_lastGl){document.getElementById('phon-status').textContent='⚠ Erst übersetzen!';return;}
+  playGl(_lastGl);
+  document.getElementById('phon-status').textContent='🔊 Sende…';
+  setTimeout(()=>document.getElementById('phon-status').textContent='✓ Gesendet.',
+    (_lastGl.replace(/[[\] .,!?;:]/g,'').length*120+500));
+}
+
+async function togglePhonReceive(){
+  const btn=document.getElementById('btn-phon-recv');
+  if(_phonRecv){
+    _phonRecv=false;
+    if(_phonProc){_phonProc.disconnect();_phonProc=null;}
+    if(_phonStream){_phonStream.getTracks().forEach(t=>t.stop());_phonStream=null;}
+    btn.textContent='🎙 Empfangen';btn.className='btn-secondary';
+    document.getElementById('phon-status').textContent='Empfang gestoppt.';
+    if(_phonWord){_phonText+=(_phonText?' ':'')+_phonWord;_phonWord='';updatePhonDisplay();}
+    return;
+  }
+  try{
+    _phonStream=await navigator.mediaDevices.getUserMedia(
+      {audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});
+  }catch(e){
+    document.getElementById('phon-status').textContent='✗ Mikrofon: '+e.message;return;
+  }
+  const ctx=getCtx();
+  if(ctx.state!=='running') await ctx.resume();
+  const source=ctx.createMediaStreamSource(_phonStream);
+  _phonProc=ctx.createScriptProcessor(2048,1,1);
+  _prevPhon=null;_phonWord='';_phonText='';_silFrames=0;
+  _phonProc.onaudioprocess=e=>{
+    const samples=Array.from(e.inputBuffer.getChannelData(0));
+    const ph=detectBestPhoneme(samples,ctx.sampleRate);
+    if(ph===null){
+      _silFrames++;
+      if(_silFrames>=3&&_phonWord){
+        _phonText+=(_phonText?' ':'')+_phonWord;
+        _phonWord='';_prevPhon=null;
+        updatePhonDisplay();
+      }
+    }else{
+      _silFrames=0;
+      if(ph!==_prevPhon){_phonWord+=ph;_prevPhon=ph;
+        document.getElementById('phon-status').textContent='🎙 …'+_phonWord;}
+    }
+  };
+  source.connect(_phonProc);
+  _phonProc.connect(ctx.destination);
+  _phonRecv=true;
+  btn.textContent='⏹ Stop';btn.className='btn-primary';
+  document.getElementById('phon-status').textContent='🎙 Höre zu…';
+  document.getElementById('phon-recv-panel').style.display='block';
+}
+
+function updatePhonDisplay(){
+  const gl=_phonText.trim();
+  document.getElementById('phon-gl').textContent=gl||'—';
+  document.getElementById('phon-de').textContent=gl?reverseTranslate(gl):'—';
+}
 
 // Enter-Shortcut
 document.getElementById('input').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();doTranslate();} });
