@@ -560,21 +560,23 @@ function toggleSpeech(){
     btn.textContent='⏹'; btn.className='btn-primary';
     document.getElementById('info').textContent='🎤 Aufnahme läuft…';
   };
-  let _gotResult=false;
+  let _gotResult=false, _hadError=false;
   _recognition.onresult=e=>{
-    const text=(e.results[0][0].transcript||'').trim();
-    if(!text) return;
+    const text=((e.results[0]||[])[0]||{}).transcript||'';
+    if(!text.trim()) return;
     _gotResult=true;
-    document.getElementById('input').value=text;
+    document.getElementById('input').value=text.trim();
     doTranslate();
   };
   _recognition.onerror=e=>{
-    document.getElementById('info').textContent='✗ Mikrofon: '+e.error;
+    _hadError=true;
+    const msg={'no-speech':'Keine Sprache erkannt.','network':'Netzwerkfehler (Internet nötig).','not-allowed':'Mikrofon-Zugriff verweigert.','audio-capture':'Kein Mikrofon gefunden.'};
+    document.getElementById('info').textContent='✗ '+(msg[e.error]||e.error);
   };
   _recognition.onend=()=>{
     _recActive=false;
     btn.textContent='🎤'; btn.className='btn-secondary';
-    if(!_gotResult) document.getElementById('info').textContent='⚠ Nichts erkannt — nochmal versuchen.';
+    if(!_gotResult&&!_hadError) document.getElementById('info').textContent='⚠ Nichts erkannt — nochmal versuchen.';
   };
   _recognition.start();
 }
