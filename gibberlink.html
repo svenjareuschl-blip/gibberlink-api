@@ -553,35 +553,26 @@ function toggleSpeech(){
   }
   _recognition=new SR();
   _recognition.continuous=false;
-  _recognition.interimResults=true;
+  _recognition.interimResults=false;
   _recognition.lang=navigator.language||'de-DE';
   _recognition.onstart=()=>{
     _recActive=true;
     btn.textContent='⏹'; btn.className='btn-primary';
     document.getElementById('info').textContent='🎤 Aufnahme läuft…';
   };
-  let _gotResult=false, _hadError=false;
   _recognition.onresult=e=>{
-    for(let i=0;i<e.results.length;i++){
-      if(e.results[i].isFinal){
-        const text=e.results[i][0].transcript.trim();
-        if(!text) continue;
-        _gotResult=true;
-        document.getElementById('input').value=text;
-        doTranslate();
-        return;
-      }
-    }
+    const text=(e.results[0][0].transcript||'').trim();
+    if(!text) return;
+    document.getElementById('input').value=text;
+    doTranslate();
   };
   _recognition.onerror=e=>{
-    _hadError=true;
     const msg={'no-speech':'Keine Sprache erkannt.','network':'Netzwerkfehler (Internet nötig).','not-allowed':'Mikrofon-Zugriff verweigert.','audio-capture':'Kein Mikrofon gefunden.'};
     document.getElementById('info').textContent='✗ '+(msg[e.error]||e.error);
   };
   _recognition.onend=()=>{
     _recActive=false;
     btn.textContent='🎤'; btn.className='btn-secondary';
-    if(!_gotResult&&!_hadError) document.getElementById('info').textContent='⚠ Nichts erkannt — nochmal versuchen.';
   };
   _recognition.start();
 }
