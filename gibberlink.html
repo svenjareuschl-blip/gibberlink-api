@@ -726,7 +726,7 @@ async function toggleReceive(){
   const ctx=getCtx();
   if(ctx.state==='suspended') ctx.resume();
   const source=ctx.createMediaStreamSource(_recv_stream);
-  _recv_proc=ctx.createScriptProcessor(1024,1,1);
+  _recv_proc=ctx.createScriptProcessor(4096,1,1);
   _recv_proc.onaudioprocess=e=>{
     const f32=new Float32Array(e.inputBuffer.getChannelData(0));
     const res=_ggw.decode(_ggw_inst, convertTypedArray(f32, Int8Array));
