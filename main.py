@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import psycopg2
-import psycopg2.extras
+import pg8000.dbapi
+import urllib.parse
 import os
 import random
 
@@ -15,24 +15,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── GL-Wort-Erzeugung ─────────────────────────────────────────────────────────
-VOWELS     = ['a', 'e', 'i', 'o', 'u']
-CONSONANTS = ['b', 'd', 'f', 'g', 'k', 'l', 'm', 'n', 'p', 'r', 's', 't', 'v', 'z']
-
-def generate_gl_word(original: str, attempt: int = 0) -> str:
-    seed = sum(ord(c) for c in original.lower()) + attempt * 997
-    r = random.Random(seed)
-    n_syl = r.randint(1, 3)
-    word = ''
-    for _ in range(n_syl):
-        word += r.choice(CONSONANTS) + r.choice(VOWELS)
-        if r.random() < 0.35:
-            word += r.choice(CONSONANTS)
-    return word
-
-# ── Datenbank ─────────────────────────────────────────────────────────────────
+# ── Datenbankverbindung ───────────────────────────────────────────────────────
 def get_db():
-    return psycopg2.connect(os.environ["DATABASE_URL"])
+    url = urllib.parse.urlparse(os.environ["DATABASE_URL"])
+    return pg8000.dbapi.connect(
+        host=url.hostname,
+        port=url.port or 5432,
+        database=url.path.lstrip("/"),
+        user=url.username,
+        password=url.password,
+        ssl_context=True,
+    )
 
 def init_db():
     conn = get_db()
@@ -57,16 +50,31 @@ def init_db():
 async def startup():
     init_db()
 
+# ── GL-Wort-Erzeugung ─────────────────────────────────────────────────────────
+VOWELS     = ['a', 'e', 'i', 'o', 'u']
+CONSONANTS = ['b', 'd', 'f', 'g', 'k', 'l', 'm', 'n', 'p', 'r', 's', 't', 'v', 'z']
+
+def generate_gl_word(original: str, attempt: int = 0) -> str:
+    seed = sum(ord(c) for c in original.lower()) + attempt * 997
+    r = random.Random(seed)
+    n_syl = r.randint(1, 3)
+    word = ''
+    for _ in range(n_syl):
+        word += r.choice(CONSONANTS) + r.choice(VOWELS)
+        if r.random() < 0.35:
+            word += r.choice(CONSONANTS)
+    return word
+
 # ── Endpunkte ─────────────────────────────────────────────────────────────────
 @app.get("/dict")
 def get_dict():
     conn = get_db()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT original, lang, gl_word AS gl FROM words ORDER BY id")
+    cur = conn.cursor()
+    cur.execute("SELECT original, lang, gl_word FROM words ORDER BY id")
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    return list(rows)
+    return [{"original": r[0], "lang": r[1], "gl": r[2]} for r in rows]
 
 class AddRequest(BaseModel):
     original: str
@@ -88,7 +96,6 @@ def add_word(req: AddRequest):
         cur.close(); conn.close()
         return {"gl": row[0], "original": orig, "new": False}
 
-    # GL-Wort erzeugen, Kollisionen auflösen
     attempt = 0
     while True:
         gl = generate_gl_word(lower, attempt)

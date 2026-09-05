@@ -1,4 +1,4 @@
 fastapi==0.95.2
 uvicorn[standard]==0.22.0
-psycopg2-binary==2.9.9
+pg8000==1.31.2
 pydantic==1.10.13
