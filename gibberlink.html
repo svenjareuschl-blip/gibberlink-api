@@ -560,8 +560,11 @@ function toggleSpeech(){
     btn.textContent='⏹'; btn.className='btn-primary';
     document.getElementById('info').textContent='🎤 Aufnahme läuft…';
   };
+  let _gotResult=false;
   _recognition.onresult=e=>{
-    const text=e.results[0][0].transcript;
+    const text=(e.results[0][0].transcript||'').trim();
+    if(!text) return;
+    _gotResult=true;
     document.getElementById('input').value=text;
     doTranslate();
   };
@@ -571,6 +574,7 @@ function toggleSpeech(){
   _recognition.onend=()=>{
     _recActive=false;
     btn.textContent='🎤'; btn.className='btn-secondary';
+    if(!_gotResult) document.getElementById('info').textContent='⚠ Nichts erkannt — nochmal versuchen.';
   };
   _recognition.start();
 }
