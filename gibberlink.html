@@ -482,6 +482,7 @@ async function doTranslate(){
         COMMUNITY_DICT[word.toLowerCase()]=data.gl;
         COMMUNITY_REV[data.gl]=word;
         FALLBACK_MAP[data.gl]=word;
+        r.tokens.forEach(t=>{ if(t.de&&t.de.toLowerCase()===word.toLowerCase()){ t.gl=data.gl; t.known=true; } });
       }catch(e){}
     }
   }
