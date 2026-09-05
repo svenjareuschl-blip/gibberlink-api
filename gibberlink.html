@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gibberlink — Geheimsprache</title>
+<script>
+// GGwave WASM aus CDN laden
+var Module = {
+  locateFile: function(path) {
+    return 'https://cdn.jsdelivr.net/npm/ggwave/' + path;
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/ggwave/ggwave.js" defer></script>
+<script type="module">
+  import {franc} from 'https://esm.sh/franc-min@6';
+  window._detectLang = franc;
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+body{display:flex;flex-direction:column;align-items:center;padding:2rem 1rem;gap:1.5rem;min-height:100vh}
+h1{font-size:1.6rem;font-weight:800;letter-spacing:.04em}
+h1 span{color:#58a6ff}
+.sub{font-size:.8rem;color:#8b949e;text-align:center;max-width:480px;line-height:1.6}
+.card{background:#161b22;border:1px solid #21262d;border-radius:12px;padding:1.4rem;width:100%;max-width:600px}
+.card h2{font-size:.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8b949e;margin-bottom:.9rem}
+textarea{width:100%;background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:7px;
+  padding:.6rem .8rem;font-size:.95rem;resize:vertical;min-height:90px;font-family:inherit;
+  line-height:1.5;transition:border-color .15s}
+textarea:focus{outline:none;border-color:#58a6ff}
+.result{background:#0d1117;border:1px solid #21262d;border-radius:7px;padding:.7rem .9rem;
+  min-height:60px;font-size:1.05rem;letter-spacing:.04em;line-height:1.7;word-break:break-word;
+  font-weight:500;color:#58a6ff}
+.result.reverse{color:#e6edf3;font-size:.95rem;letter-spacing:.02em;font-weight:400}
+.unknown{color:#d29922;font-style:italic}
+.btn-row{display:flex;gap:.6rem;margin-top:.8rem;flex-wrap:wrap}
+button{border:none;border-radius:7px;padding:.45rem 1rem;font-size:.88rem;cursor:pointer;
+  font-weight:600;transition:opacity .15s}
+button:hover{opacity:.85}
+.btn-primary{background:#1f6feb;color:#fff}
+.btn-secondary{background:#21262d;color:#e6edf3;border:1px solid #30363d}
+.btn-play{background:#238636;color:#fff}
+.btn-dl{background:#21262d;color:#8b949e;border:1px solid #30363d;font-size:.8rem}
+.info{font-size:.72rem;color:#484f58;margin-top:.5rem;line-height:1.5}
+.badge{display:inline-block;background:#161b22;border:1px solid #30363d;border-radius:4px;
+  font-size:.65rem;padding:.1rem .35rem;color:#8b949e;margin-right:.25rem;font-family:monospace}
+.divider{width:100%;max-width:600px;border:none;border-top:1px solid #21262d}
+footer{font-size:.7rem;color:#30363d;text-align:center}
+.slider-row{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+.slider-item label{font-size:.72rem;color:#8b949e;display:flex;justify-content:space-between;margin-bottom:.3rem}
+.slider-item label span{color:#58a6ff;font-weight:700;font-family:monospace}
+input[type=range]{width:100%;accent-color:#58a6ff;cursor:pointer;height:4px}
+</style>
+</head>
+<body>
+
+<h1>⚙ <span>Gibberlink</span></h1>
+<p class="sub">Eine erfundene Sprache — Deutsch &amp; Englisch als Eingangssprachen, SOV-Satzstellung, eigene Phonotaktik. Portable — kein Server nötig.</p>
+
+<!-- Klangeinstellungen -->
+<div class="card">
+  <h2>🎛 Klangeinstellungen</h2>
+  <div class="btn-row" style="margin-bottom:.9rem">
+    <button class="btn-secondary" onclick="setPreset('robot')">🤖 Robotisch</button>
+    <button class="btn-secondary" onclick="setPreset('melodic')">🎵 Melodisch</button>
+  </div>
+  <div class="slider-row">
+    <div class="slider-item">
+      <label>Tempo <span id="lbl-tempo">1.0×</span></label>
+      <input type="range" id="sl-tempo" min="0.3" max="2.5" step="0.1" value="1.0"
+        oninput="document.getElementById('lbl-tempo').textContent=parseFloat(this.value).toFixed(1)+'×'">
+    </div>
+    <div class="slider-item">
+      <label>Vibrato <span id="lbl-vibrato">0 Hz</span></label>
+      <input type="range" id="sl-vibrato" min="0" max="25" step="1" value="0"
+        oninput="document.getElementById('lbl-vibrato').textContent=this.value+' Hz'">
+    </div>
+    <div class="slider-item">
+      <label>Portamento <span id="lbl-porta">0 ms</span></label>
+      <input type="range" id="sl-porta" min="0" max="150" step="5" value="0"
+        oninput="document.getElementById('lbl-porta').textContent=this.value+' ms'">
+    </div>
+    <div class="slider-item">
+      <label>Klangfarbe <span id="lbl-timbre">Sinus</span></label>
+      <input type="range" id="sl-timbre" min="0" max="1" step="0.05" value="0"
+        oninput="document.getElementById('lbl-timbre').textContent=this.value<0.2?'Sinus':this.value<0.6?'Weich':'Warm'">
+    </div>
+  </div>
+</div>
+
+<!-- DE/EN → GL -->
+<div class="card">
+  <h2>🔤 Deutsch / Englisch → Gibberlink</h2>
+  <textarea id="input" placeholder="Satz eingeben… z.B. &quot;I love you&quot; oder &quot;Ich liebe dich&quot;"></textarea>
+  <div class="btn-row">
+    <button class="btn-primary" onclick="doTranslate()">Übersetzen</button>
+    <button class="btn-play"    onclick="doPlay()">▶ Anhören</button>
+    <button class="btn-dl"      onclick="doDownload()">⬇ WAV</button>
+    <button class="btn-secondary" onclick="doClear()">Löschen</button>
+  </div>
+  <div class="result" id="output" style="margin-top:.8rem">—</div>
+  <div class="info" id="info"></div>
+</div>
+
+<!-- GL → DE/EN -->
+<div class="card">
+  <h2>🔁 Gibberlink → Rückübersetzung</h2>
+  <textarea id="rev-input" placeholder="Gibberlink-Text eingeben… z.B. &quot;ke du glitive&quot;"></textarea>
+  <div class="btn-row">
+    <button class="btn-primary" onclick="doReverse()">Zurückübersetzen</button>
+    <button class="btn-play"    onclick="doPlayRev()">▶ Anhören</button>
+    <button id="btn-lang" class="btn-secondary" onclick="toggleRevLang()" style="margin-left:auto">🇩🇪 DE</button>
+  </div>
+  <div class="result reverse" id="rev-output" style="margin-top:.8rem">—</div>
+</div>
+
+<!-- Wörterbuch -->
+<div class="card">
+  <h2>📖 Kurzreferenz</h2>
+  <div id="dict-preview" style="font-size:.78rem;line-height:1.9;column-count:2;column-gap:1.5rem"></div>
+</div>
+
+<!-- WAV Decoder -->
+<div class="card">
+  <h2>🔊 WAV importieren → Gibberlink dekodieren</h2>
+  <p style="font-size:.8rem;color:#8b949e;margin-bottom:.8rem;line-height:1.6">Lade eine Gibberlink-WAV-Datei (erzeugt mit dem ⬇ WAV Button) hoch. Der Frequenzanalysator erkennt die Sinustöne und übersetzt sie zurück.</p>
+  <input type="file" id="wav-file" accept=".wav,audio/*" style="display:none" onchange="decodeWav(this)">
+  <div class="btn-row">
+    <button class="btn-secondary" onclick="document.getElementById('wav-file').click()">📂 WAV-Datei öffnen</button>
+  </div>
+  <div style="margin-top:.8rem">
+    <div style="font-size:.72rem;color:#484f58;margin-bottom:.4rem" id="wav-status">Noch keine Datei geladen.</div>
+    <div class="result" id="wav-gl" style="margin-bottom:.5rem">—</div>
+    <div style="font-size:.75rem;color:#8b949e;margin-bottom:.3rem">Rückübersetzung:</div>
+    <div class="result reverse" id="wav-de">—</div>
+  </div>
+</div>
+
+<!-- GGwave -->
+<div class="card">
+  <h2>📡 GGwave Live-Übertragung</h2>
+  <p style="font-size:.8rem;color:#8b949e;margin-bottom:.9rem;line-height:1.6">Sende den GL-Text als robustes Audio-Signal (Lautsprecher) oder empfange ihn live per Mikrofon — auch Gerät↔Gerät möglich. <span style="color:#484f58">Empfangen benötigt HTTPS.</span></p>
+  <div class="btn-row">
+    <button class="btn-play" onclick="doGGSend()">📡 Senden</button>
+    <button id="btn-recv" class="btn-secondary" onclick="toggleReceive()">🎙 Empfangen</button>
+  </div>
+  <div class="info" id="gg-status" style="margin-top:.6rem;font-size:.78rem;color:#8b949e">GGwave wird geladen…</div>
+  <div id="gg-recv-panel" style="display:none;margin-top:.8rem">
+    <div style="font-size:.75rem;color:#8b949e;margin-bottom:.3rem">Empfangen (GL):</div>
+    <div class="result" id="gg-gl">—</div>
+    <div style="font-size:.75rem;color:#8b949e;margin:.5rem 0 .3rem">Rückübersetzung:</div>
+    <div class="result reverse" id="gg-de">—</div>
+  </div>
+</div>
+
+<hr class="divider">
+<footer>Gibberlink v0.1 · SOV · 177 Wörter · DE+EN · GGwave</footer>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// WÖRTERBUCH
+// ═══════════════════════════════════════════════════════════
+const DICT = {"ich":"ke","du":"du","er":"bal","sie":"ra","es":"tus","wir":"ka","ihr":"lim","mein":"kla","dein":"li","sein":"toxma","unser":"rinbep","euer":"dro","der":"zimgi","die":"fun","das":"kun","ein":"vanvis","eine":"rino","dieser":"fepis","jener":"fuval","jede":"vol","wer":"nupa","was":"pir","wo":"fo","wann":"gru","wie":"dix","warum":"ve","welche":"nal","haben":"grera","werden":"zax","können":"nu","müssen":"zu","sollen":"zvemit","wollen":"garu","dürfen":"bak","mögen":"bi","machen":"kon","gehen":"rut","kommen":"von","sehen":"mi","wissen":"zasak","denken":"refamu","sagen":"treru","geben":"visgle","nehmen":"zurtudor","stehen":"palupe","laufen":"kletenum","sprechen":"bezol","hören":"fikfuva","lesen":"pofit","schreiben":"zufus","essen":"fifo","trinken":"zvivep","schlafen":"klepik","leben":"movo","sterben":"lubimon","lieben":"glitive","hassen":"vakriki","arbeiten":"kopsumu","lernen":"lesizem","mensch":"tesklopu","kind":"kevon","frau":"totsupba","mann":"balutup","haus":"zoskor","welt":"trote","land":"kotomnut","wasser":"zvezva","feuer":"nata","luft":"risfukra","erde":"gufok","licht":"gakirgu","dunkel":"suldem","tag":"busze","nacht":"bimep","zeit":"foxbes","jahr":"gutram","weg":"lirrok","ort":"frazvino","sprache":"fuzir","wort":"kufa","name":"munmasi","zahl":"dokbem","ding":"bimmek","tod":"namlom","gut":"drigutza","schlecht":"vemgeppu","groß":"pemox","klein":"luga","lang":"krabi","kurz":"sipi","alt":"derti","neu":"bafuzo","jung":"lofa","schnell":"geka","langsam":"sozi","laut":"mugrivap","leise":"bera","warm":"gnunoril","kalt":"bivosvix","stark":"papga","schwach":"nilbulzon","null":"vrubarsa","eins":"grezim","zwei":"zemalpi","drei":"tepbulme","vier":"gupkupnim","fünf":"fulu","sechs":"melol","sieben":"mobe","acht":"kelki","neun":"sellan","zehn":"pakoler","ja":"lugle","nein":"furtuxbu","nicht":"malule","und":"vaxsise","oder":"dozu","aber":"sogika","wenn":"ludu","weil":"grofreta","dass":"mukisdik","auch":"sakexfro","noch":"zveklu","schon":"zebon","jetzt":"tanremkre","hier":"zvora","dort":"saror","alle":"kurfarlun","viel":"grenastip","mehr":"fagekze","wenig":"mikibex","immer":"torfimbus","nie":"nexto","in":"pirdrase","an":"gogliba","auf":"meppa","zu":"soste","von":"lettre","mit":"nuprolson","für":"bola","über":"vazvo","nach":"regi","aus":"baben","bei":"vako","bis":"linsora","durch":"mirto","gegen":"votbidil","bauen":"tervigro","kaufen":"zilso","verkaufen":"sisti","spielen":"ratfi","fragen":"vexpubra","antworten":"gnasengo","helfen":"rivevup","öffnen":"fuxvat","schließen":"bruvixsip","kennen":"bergox","finden":"zverate","suchen":"lolsu","bringen":"getmugi","legen":"vustrulak","setzen":"kurzin","zeigen":"gnokrekes","brauchen":"bilkox","bleiben":"brugolkat","fliegen":"lidex","fahren":"nikna","schwimmen":"brefentot","tanzen":"viklambi","singen":"gapo","kochen":"brovo","zahlen":"trodalser","warten":"banpamix","beginnen":"bolalak","enden":"bismom","ändern":"senga","vergessen":"razve"};
+
+const ALIASES = {"mich":"ich","mir":"ich","dich":"du","dir":"du","ihn":"er","ihm":"er","ihr":"sie","uns":"wir","euch":"ihr","sich":"sie","bin":"sein","bist":"sein","ist":"sein","sind":"sein","seid":"sein","war":"sein","warst":"sein","waren":"sein","wart":"sein","wäre":"sein","wären":"sein","gewesen":"sein","habe":"haben","hast":"haben","hat":"haben","habt":"haben","hatte":"haben","hattest":"haben","hatten":"haben","hattet":"haben","gehabt":"haben","werde":"werden","wirst":"werden","wird":"werden","werdet":"werden","wurde":"werden","wurdest":"werden","wurden":"werden","wurdet":"werden","geworden":"werden","kann":"können","kannst":"können","könnt":"können","konnte":"können","konnten":"können","gekonnt":"können","muss":"müssen","musst":"müssen","müsst":"müssen","musste":"müssen","gemusst":"müssen","soll":"sollen","sollst":"sollen","sollt":"sollen","sollte":"sollen","gesollt":"sollen","will":"werden","willst":"wollen","wollt":"wollen","wollte":"wollen","wollten":"wollen","gewollt":"wollen","darf":"dürfen","darfst":"dürfen","dürft":"dürfen","durfte":"dürfen","gedurft":"dürfen","mag":"mögen","magst":"mögen","mögt":"mögen","mochte":"mögen","gemocht":"mögen","mache":"machen","machst":"machen","macht":"machen","machte":"machen","machten":"machen","gemacht":"machen","gehe":"gehen","gehst":"gehen","geht":"gehen","ging":"gehen","gingen":"gehen","gegangen":"gehen","komme":"kommen","kommst":"kommen","kommt":"kommen","kam":"kommen","kamen":"kommen","gekommen":"kommen","sehe":"sehen","siehst":"sehen","sieht":"sehen","sah":"sehen","sahen":"sehen","gesehen":"sehen","weiß":"wissen","weißt":"wissen","wisst":"wissen","wusste":"wissen","wussten":"wissen","gewusst":"wissen","denke":"denken","denkst":"denken","denkt":"denken","dachte":"denken","gedacht":"denken","sage":"sagen","sagst":"sagen","sagt":"sagen","sagte":"sagen","sagten":"sagen","gesagt":"sagen","gebe":"geben","gibst":"geben","gibt":"geben","gab":"geben","gaben":"geben","gegeben":"geben","nehme":"nehmen","nimmst":"nehmen","nimmt":"nehmen","nahm":"nehmen","nahmen":"nehmen","genommen":"nehmen","stehe":"stehen","stehst":"stehen","steht":"stehen","stand":"stehen","standen":"stehen","gestanden":"stehen","laufe":"laufen","läufst":"laufen","läuft":"laufen","lief":"laufen","liefen":"laufen","gelaufen":"laufen","spreche":"sprechen","sprichst":"sprechen","spricht":"sprechen","sprach":"sprechen","gesprochen":"sprechen","höre":"hören","hörst":"hören","hört":"hören","hörte":"hören","gehört":"hören","lese":"lesen","liest":"lesen","las":"lesen","gelesen":"lesen","schreibe":"schreiben","schreibst":"schreiben","schreibt":"schreiben","schrieb":"schreiben","geschrieben":"schreiben","esse":"essen","isst":"essen","aß":"essen","gegessen":"essen","trinke":"trinken","trinkst":"trinken","trinkt":"trinken","trank":"trinken","getrunken":"trinken","schlafe":"schlafen","schläfst":"schlafen","schläft":"schlafen","schlief":"schlafen","geschlafen":"schlafen","lebe":"leben","lebst":"leben","lebt":"leben","lebte":"leben","gelebt":"leben","sterbe":"sterben","stirbst":"sterben","stirbt":"sterben","starb":"sterben","gestorben":"sterben","liebe":"lieben","liebst":"lieben","liebt":"lieben","liebte":"lieben","geliebt":"lieben","hasse":"hassen","hasst":"hassen","hasste":"hassen","gehasst":"hassen","arbeite":"arbeiten","arbeitest":"arbeiten","arbeitet":"arbeiten","arbeitete":"arbeiten","gearbeitet":"arbeiten","lerne":"lernen","lernst":"lernen","lernt":"lernen","lernte":"lernen","gelernt":"lernen","dem":"der","den":"der","des":"der","einer":"eine","einem":"ein","einen":"ein","eines":"ein","gute":"gut","guten":"gut","gutem":"gut","guter":"gut","große":"groß","großen":"groß","großem":"groß","kleine":"klein","kleinen":"klein","alte":"alt","alten":"alt","neue":"neu","neuen":"neu","neuer":"neu","junge":"jung","jungen":"jung","geh":"gehen","komm":"kommen","sieh":"sehen","mach":"machen","sag":"sagen","gib":"geben","nimm":"nehmen","lauf":"laufen","hör":"hören","lies":"lesen","lern":"lernen","steh":"stehen","denk":"denken","schreib":"schreiben","schlaf":"schlafen","iss":"essen","trink":"trinken","sprich":"sprechen","menschen":"mensch","kinder":"kind","frauen":"frau","männer":"mann","häuser":"haus","wörter":"wort","tage":"tag","nächte":"nacht","jahre":"jahr","wege":"weg","länder":"land","welten":"welt","namen":"name","dinge":"ding","zeiten":"zeit","orte":"ort","baue":"bauen","baust":"bauen","baut":"bauen","baute":"bauen","gebaut":"bauen","kaufe":"kaufen","kaufst":"kaufen","kauft":"kaufen","kaufte":"kaufen","gekauft":"kaufen","spiele":"spielen","spielst":"spielen","spielt":"spielen","spielte":"spielen","gespielt":"spielen","frage":"fragen","fragst":"fragen","fragt":"fragen","fragte":"fragen","gefragt":"fragen","helfe":"helfen","hilfst":"helfen","hilft":"helfen","half":"helfen","geholfen":"helfen","finde":"finden","findest":"finden","findet":"finden","fand":"finden","gefunden":"finden","suche":"suchen","suchst":"suchen","sucht":"suchen","suchte":"suchen","gesucht":"suchen","bringe":"bringen","bringst":"bringen","bringt":"bringen","brachte":"bringen","gebracht":"bringen","bleibe":"bleiben","bleibst":"bleiben","bleibt":"bleiben","blieb":"bleiben","geblieben":"bleiben","fahre":"fahren","fährst":"fahren","fährt":"fahren","fuhr":"fahren","gefahren":"fahren","singe":"singen","singst":"singen","singt":"singen","sang":"singen","gesungen":"singen","warte":"warten","wartest":"warten","wartet":"warten","wartete":"warten","gewartet":"warten","vergesse":"vergessen","vergisst":"vergessen","vergaß":"vergessen","kenne":"kennen","kennst":"kennen","kennt":"kennen","kannte":"kennen","gekannt":"kennen","zeige":"zeigen","zeigst":"zeigen","zeigt":"zeigen","zeigte":"zeigen","gezeigt":"zeigen","beginne":"beginnen","beginnst":"beginnen","beginnt":"beginnen","begann":"beginnen","begonnen":"beginnen","i":"ich","me":"ich","my":"mein","mine":"mein","myself":"ich","you":"du","your":"dein","yours":"dein","yourself":"du","he":"er","him":"er","his":"sein","she":"sie","her":"sie","hers":"sie","it":"es","its":"sein","we":"wir","us":"wir","our":"unser","ours":"unser","ourselves":"wir","they":"ihr","them":"ihr","their":"euer","theirs":"euer","the":"der","a":"ein","an":"ein","this":"dieser","that":"jener","these":"dieser","those":"jener","who":"wer","what":"was","where":"wo","when":"wann","how":"wie","why":"warum","which":"welche","be":"sein","am":"sein","is":"sein","are":"sein","been":"sein","being":"sein","have":"haben","has":"haben","had":"haben","having":"haben","would":"werden","shall":"sollen","can":"können","could":"können","must":"müssen","should":"sollen","want":"wollen","wants":"wollen","wanted":"wollen","may":"dürfen","might":"dürfen","like":"mögen","likes":"mögen","liked":"mögen","do":"machen","does":"machen","did":"machen","done":"machen","make":"machen","makes":"machen","made":"machen","go":"gehen","goes":"gehen","went":"gehen","gone":"gehen","going":"gehen","come":"kommen","comes":"kommen","came":"kommen","coming":"kommen","see":"sehen","sees":"sehen","saw":"sehen","seen":"sehen","seeing":"sehen","know":"wissen","knows":"wissen","knew":"wissen","known":"wissen","think":"denken","thinks":"denken","thought":"denken","say":"sagen","says":"sagen","said":"sagen","saying":"sagen","give":"geben","gives":"geben","gave":"geben","given":"geben","take":"nehmen","takes":"nehmen","took":"nehmen","taken":"nehmen","stands":"stehen","stood":"stehen","run":"laufen","runs":"laufen","ran":"laufen","speak":"sprechen","speaks":"sprechen","spoke":"sprechen","spoken":"sprechen","hear":"hören","hears":"hören","heard":"hören","read":"lesen","reads":"lesen","write":"schreiben","writes":"schreiben","wrote":"schreiben","written":"schreiben","eat":"essen","eats":"essen","ate":"essen","eaten":"essen","drink":"trinken","drinks":"trinken","drank":"trinken","drunk":"trinken","sleep":"schlafen","sleeps":"schlafen","slept":"schlafen","live":"leben","lives":"leben","lived":"leben","die":"sterben","dies":"sterben","died":"sterben","love":"lieben","loves":"lieben","loved":"lieben","hate":"hassen","hates":"hassen","hated":"hassen","work":"arbeiten","works":"arbeiten","worked":"arbeiten","working":"arbeiten","learn":"lernen","learns":"lernen","learned":"lernen","learnt":"lernen","build":"bauen","builds":"bauen","built":"bauen","building":"bauen","buy":"kaufen","buys":"kaufen","bought":"kaufen","sell":"verkaufen","sells":"verkaufen","sold":"verkaufen","play":"spielen","plays":"spielen","played":"spielen","ask":"fragen","asks":"fragen","asked":"fragen","answer":"antworten","answers":"antworten","answered":"antworten","help":"helfen","helps":"helfen","helped":"helfen","open":"öffnen","opens":"öffnen","opened":"öffnen","close":"schließen","closes":"schließen","closed":"schließen","find":"finden","finds":"finden","found":"finden","search":"suchen","searches":"suchen","searched":"suchen","bring":"bringen","brings":"bringen","brought":"bringen","stay":"bleiben","stays":"bleiben","stayed":"bleiben","show":"zeigen","shows":"zeigen","showed":"zeigen","shown":"zeigen","need":"brauchen","needs":"brauchen","needed":"brauchen","fly":"fliegen","flies":"fliegen","flew":"fliegen","flown":"fliegen","drive":"fahren","drives":"fahren","drove":"fahren","driven":"fahren","swim":"schwimmen","swims":"schwimmen","swam":"schwimmen","swum":"schwimmen","dance":"tanzen","dances":"tanzen","danced":"tanzen","sing":"singen","sings":"singen","sung":"singen","cook":"kochen","cooks":"kochen","cooked":"kochen","pay":"zahlen","pays":"zahlen","paid":"zahlen","wait":"warten","waits":"warten","waited":"warten","begin":"beginnen","begins":"beginnen","began":"beginnen","begun":"beginnen","start":"beginnen","starts":"beginnen","started":"beginnen","end":"enden","ends":"enden","ended":"enden","change":"ändern","changes":"ändern","changed":"ändern","forget":"vergessen","forgets":"vergessen","forgot":"vergessen","forgotten":"vergessen","person":"mensch","people":"mensch","human":"mensch","humans":"mensch","child":"kind","children":"kind","woman":"frau","women":"frau","man":"mann","men":"mann","house":"haus","houses":"haus","home":"haus","world":"welt","worlds":"welt","country":"land","countries":"land","water":"wasser","fire":"feuer","air":"luft","earth":"erde","ground":"erde","light":"licht","dark":"dunkel","darkness":"dunkel","day":"tag","days":"tag","night":"nacht","nights":"nacht","time":"zeit","times":"zeit","year":"jahr","years":"jahr","way":"weg","ways":"weg","place":"ort","places":"ort","language":"sprache","languages":"sprache","word":"wort","words":"wort","name":"name","names":"name","number":"zahl","numbers":"zahl","thing":"ding","things":"ding","life":"leben","death":"tod","good":"gut","well":"gut","bad":"schlecht","evil":"schlecht","big":"groß","large":"groß","great":"groß","small":"klein","little":"klein","long":"lang","short":"kurz","old":"alt","new":"neu","young":"jung","fast":"schnell","quick":"schnell","quickly":"schnell","slow":"langsam","slowly":"langsam","loud":"laut","quiet":"leise","silent":"leise","warm":"warm","hot":"warm","cold":"kalt","cool":"kalt","strong":"stark","weak":"schwach","zero":"null","one":"eins","two":"zwei","three":"drei","four":"vier","five":"fünf","six":"sechs","seven":"sieben","eight":"acht","nine":"neun","ten":"zehn","yes":"ja","no":"nein","not":"nicht","and":"und","or":"oder","but":"aber","if":"wenn","because":"weil","also":"auch","still":"noch","already":"schon","now":"jetzt","here":"hier","there":"dort","all":"alle","much":"viel","many":"viel","more":"mehr","few":"wenig","always":"immer","never":"nie","in":"in","on":"auf","at":"an","to":"zu","of":"von","with":"mit","for":"für","over":"über","after":"nach","from":"aus","by":"bei","until":"bis","through":"durch","against":"gegen"};
+
+// ═══════════════════════════════════════════════════════════
+// ÜBERSETZER
+// ═══════════════════════════════════════════════════════════
+const GL_PLURAL = 'om', GL_PAST = 'at', GL_NEG = 'vu';
+const PLURAL_ENDS = ['en','er','e','n','s'];
+const NEG_WORDS = new Set(['nicht','kein','keine','keiner','keinen','not']);
+const PAST_HELPERS = new Set(['war','hatte','wurde','ging','kam','sah','machte','sagte','hörte','lief','was','were','had','went','came','saw','made','did','said','ran','spoke','heard','wrote','ate','drank','slept','thought','gave','took','stood','built','bought','found','brought']);
+const VERBS = new Set(['sein','haben','werden','können','müssen','sollen','wollen','dürfen','mögen','machen','gehen','kommen','sehen','wissen','denken','sagen','geben','nehmen','stehen','laufen','sprechen','hören','lesen','schreiben','essen','trinken','schlafen','leben','sterben','lieben','hassen','arbeiten','lernen','bauen','kaufen','spielen','fragen','helfen','finden','suchen','bringen','bleiben','fahren','singen','warten','beginnen','be','have','do','go','come','see','know','think','say','give','take','stand','run','speak','hear','read','write','eat','drink','sleep','live','die','love','hate','work','learn','build','buy','sell','play','ask','help','find','bring','stay','show','need','fly','drive','swim','sing','wait','begin','start','make','want','like']);
+
+// Wenn die App direkt von Railway serviert wird → relative Pfade, sonst absolute URL
+const API_URL = window.location.hostname === 'investment-broker.local'
+  ? 'https://gibberlink-api-production.up.railway.app'
+  : '';
+
+// Community-Wörterbuch (vom Server geladen)
+const COMMUNITY_DICT = {};   // original_lower → gl
+const COMMUNITY_REV  = {};   // gl → original
+
+async function loadCommunityDict() {
+  if (!API_URL) return;
+  try {
+    const res = await fetch(API_URL + '/dict');
+    if (!res.ok) return;
+    const data = await res.json();
+    data.forEach(({original, gl}) => {
+      COMMUNITY_DICT[original.toLowerCase()] = gl;
+      COMMUNITY_REV[gl] = original;
+      FALLBACK_MAP[gl]  = original;
+    });
+  } catch(e) {}
+}
+loadCommunityDict();
+
+// Fallback: deterministisches Pseudowort aus Zeichencodes (offline)
+function fallbackWord(tok) {
+  const CONS=['b','d','f','g','k','l','m','n','p','r','s','t','v','z'];
+  const VOWS=['a','e','i','o','u'];
+  let seed = [...tok].reduce((s,c)=>s+c.charCodeAt(0),0);
+  const rn=()=>{ seed=(seed*1664525+1013904223)&0xffffffff; return Math.abs(seed); };
+  const syl=()=>CONS[rn()%CONS.length]+VOWS[rn()%VOWS.length];
+  const n=(rn()%2)+1;
+  return [...Array(n)].map(syl).join('');
+}
+
+// Session-Map: fallback GL-Wort → Original (für Rückübersetzung)
+const FALLBACK_MAP={};
+
+function lookup(tok) {
+  const l=tok.toLowerCase();
+  if(DICT[l]) return DICT[l];
+  const base=ALIASES[l];
+  if(base) return DICT[base]||null;
+  if(COMMUNITY_DICT[l]) return COMMUNITY_DICT[l];
+  return null;
+}
+
+function translate(text) {
+  const tokens = text.match(/[\wäöüÄÖÜß']+|[.,!?;:]/g)||[];
+  const words=[], punctAfter={};
+  tokens.forEach(t=>{
+    if(/^[.,!?;:]$/.test(t)){ if(words.length) punctAfter[words.length-1]=(punctAfter[words.length-1]||'')+t; }
+    else words.push(t);
+  });
+
+  const isPast = words.some(w=>PAST_HELPERS.has(w.toLowerCase()));
+  const verbIdx = new Set();
+  const translated=[], unknown=[], tokenMap=[];
+
+  words.forEach((w,i)=>{
+    const l=w.toLowerCase();
+    let gl=lookup(w);
+    let known=!!gl;
+    if(!known){
+      const fb=fallbackWord(l);
+      FALLBACK_MAP[fb]=w; // merken für Rückübersetzung
+      gl='['+fb+']'; unknown.push(w);
+    }
+
+    if(NEG_WORDS.has(l)) gl=GL_NEG;
+    if(isPast && VERBS.has(l)) gl=gl+GL_PAST;
+
+    // Alias → base verb check für SOV
+    const base=ALIASES[l]||l;
+    if(VERBS.has(base)||VERBS.has(l)||PAST_HELPERS.has(l)) verbIdx.add(i);
+
+    translated.push(gl);
+    tokenMap.push({de:w,gl,known});
+  });
+
+  // SOV: Verben ans Ende
+  if(verbIdx.size && words.length>2){
+    const verbs=[], rest=[];
+    translated.forEach((g,i)=>{ verbIdx.has(i)?verbs.push(g):rest.push(g); });
+    const reordered=[...rest,...verbs];
+    const last=(punctAfter[words.length-1]||'');
+    return { original:text, gibberlink:reordered.join(' ')+last, tokens:tokenMap, unknown };
+  }
+
+  const last=(punctAfter[words.length-1]||'');
+  return { original:text, gibberlink:translated.join(' ')+last, tokens:tokenMap, unknown };
+}
+
+let _revLang='de';
+function toggleRevLang(){
+  _revLang=_revLang==='de'?'en':'de';
+  document.getElementById('btn-lang').textContent=_revLang==='de'?'🇩🇪 DE':'🇬🇧 EN';
+  const txt=document.getElementById('rev-input').value.trim();
+  if(txt) document.getElementById('rev-output').textContent=reverseTranslate(txt);
+}
+
+function bestEnglish(deWord){
+  let best=null;
+  for(const [alias,canonical] of Object.entries(ALIASES)){
+    if(canonical===deWord && /^[a-z]+$/.test(alias)){
+      if(!best||alias.length<best.length) best=alias;
+    }
+  }
+  return best||deWord;
+}
+
+function reverseTranslate(glText) {
+  const rev={};
+  Object.entries(DICT).forEach(([de,gl])=>{ if(!rev[gl]) rev[gl]=de; });
+  const result=glText.trim().split(/\s+/).map(tok=>{
+    const clean=tok.replace(/[[\].,!?;:]/g,'');
+    let word=clean, notes=[];
+    if(word.startsWith('vu')){ notes.push('NEG'); word=word.slice(2); }
+    if(word.endsWith('at')){   notes.push('VERG'); word=word.slice(0,-2); }
+    if(word.endsWith('om')){   notes.push('PLU'); word=word.slice(0,-2); }
+    const de=rev[word];
+    if(de){
+      const out=_revLang==='en'?bestEnglish(de):de;
+      return out+(notes.length?'('+notes.join('·')+')':'');
+    }
+    // Fallback-Map: in dieser Session übersetzte unbekannte Wörter
+    const fb=FALLBACK_MAP[word]||FALLBACK_MAP[clean];
+    if(fb) return fb+(notes.length?'('+notes.join('·')+')':'');
+    return '[?'+clean+']';
+  });
+  return result.join(' ');
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUDIO — Web Audio API
+// ═══════════════════════════════════════════════════════════
+const VOWEL_FREQ  = {a:330,e:392,i:440,o:494,u:523};
+const CONS_FREQ   = {b:659,d:698,f:784,g:880,k:988,l:1047,m:1109,n:1175,p:1245,r:1319,s:1397,t:1480,v:1568,z:1661,x:1760};
+const DUR_V=0.13, DUR_C=0.065, DUR_GAP=0.10;
+const LFO_RATE=5.5; // Hz — Vibrato-Geschwindigkeit
+
+let _ctx=null;
+function getCtx(){ if(!_ctx) _ctx=new (window.AudioContext||window.webkitAudioContext)(); return _ctx; }
+
+function setSlider(id, val, lblId, fmt){
+  const el=document.getElementById(id); el.value=val;
+  document.getElementById(lblId).textContent=fmt(val);
+}
+function setPreset(p){
+  if(p==='robot'){
+    setSlider('sl-tempo',1.0,'lbl-tempo',v=>parseFloat(v).toFixed(1)+'×');
+    setSlider('sl-vibrato',0,'lbl-vibrato',v=>v+' Hz');
+    setSlider('sl-porta',0,'lbl-porta',v=>v+' ms');
+    setSlider('sl-timbre',0,'lbl-timbre',()=>'Sinus');
+  } else {
+    setSlider('sl-tempo',0.75,'lbl-tempo',v=>parseFloat(v).toFixed(2)+'×');
+    setSlider('sl-vibrato',8,'lbl-vibrato',v=>v+' Hz');
+    setSlider('sl-porta',60,'lbl-porta',v=>v+' ms');
+    setSlider('sl-timbre',0.5,'lbl-timbre',()=>'Weich');
+  }
+}
+
+function sliders(){
+  return {
+    tempo:   parseFloat(document.getElementById('sl-tempo').value),
+    vibrato: parseFloat(document.getElementById('sl-vibrato').value),
+    porta:   parseFloat(document.getElementById('sl-porta').value)/1000,
+    timbre:  parseFloat(document.getElementById('sl-timbre').value),
+  };
+}
+
+function playGl(glText){
+  const ctx=getCtx();
+  if(ctx.state==='suspended') ctx.resume();
+  const {tempo,vibrato,porta,timbre}=sliders();
+
+  // Alle Phoneme sammeln (inkl. Silencen für Wortgrenzen)
+  const seq=[];
+  const words=glText.replace(/[[\].,!?;:]/g,'').split(/\s+/);
+  words.forEach((w,wi)=>{
+    [...w].forEach(ch=>{
+      const isVow=!!VOWEL_FREQ[ch];
+      const freq=VOWEL_FREQ[ch]||CONS_FREQ[ch];
+      if(!freq) return;
+      seq.push({freq, dur:(isVow?DUR_V:DUR_C)*tempo, vol:isVow?0.28:0.18});
+    });
+    if(wi<words.length-1) seq.push({freq:null, dur:DUR_GAP*tempo, vol:0});
+  });
+
+  let t=ctx.currentTime+0.05;
+  seq.forEach(({freq,dur,vol},idx)=>{
+    if(!freq){ t+=dur; return; }
+
+    // Zwei Oszillatoren: Sinus + Dreieck (blendbar)
+    const osc1=ctx.createOscillator(), osc2=ctx.createOscillator();
+    const g1=ctx.createGain(), g2=ctx.createGain(), master=ctx.createGain();
+    osc1.type='sine'; osc2.type='triangle';
+    g1.gain.value=1-timbre*0.6;
+    g2.gain.value=timbre*0.45;
+    osc1.connect(g1); osc2.connect(g2);
+    g1.connect(master); g2.connect(master);
+    master.connect(ctx.destination);
+
+    // Portamento: Frequenz von vorherigem Phonem gleiten
+    const prevFreq=(()=>{ for(let i=idx-1;i>=0;i--){ if(seq[i].freq) return seq[i].freq; } return freq; })();
+    osc1.frequency.setValueAtTime(prevFreq, t);
+    osc2.frequency.setValueAtTime(prevFreq, t);
+    if(porta>0 && prevFreq!==freq){
+      const gt=Math.min(porta, dur*0.5);
+      osc1.frequency.exponentialRampToValueAtTime(freq, t+gt);
+      osc2.frequency.exponentialRampToValueAtTime(freq, t+gt);
+    } else {
+      osc1.frequency.setValueAtTime(freq, t);
+      osc2.frequency.setValueAtTime(freq, t);
+    }
+
+    // Vibrato: LFO → Frequenzmodulation
+    if(vibrato>0){
+      const lfo=ctx.createOscillator(), lfoGain=ctx.createGain();
+      lfo.frequency.value=LFO_RATE; lfoGain.gain.value=vibrato;
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc1.frequency); lfoGain.connect(osc2.frequency);
+      lfo.start(t); lfo.stop(t+dur);
+    }
+
+    // Hüllkurve: scharf (robotisch) → weicher je mehr Klangfarbe/Vibrato aktiv
+    const softness=timbre*0.6+(vibrato>0?0.3:0);
+    const atk=0.006+softness*0.018, rel=0.006+softness*0.018;
+    master.gain.setValueAtTime(0, t);
+    master.gain.linearRampToValueAtTime(vol, t+atk);
+    master.gain.setValueAtTime(vol, t+dur-rel);
+    master.gain.linearRampToValueAtTime(0, t+dur);
+
+    osc1.start(t); osc1.stop(t+dur);
+    osc2.start(t); osc2.stop(t+dur);
+    t+=dur;
+  });
+}
+
+function buildWav(glText){
+  const SR=44100;
+  const FADE=400;
+  const samples=[];
+  const sine=(freq,dur,vol)=>{
+    const n=Math.round(SR*dur);
+    for(let i=0;i<n;i++){
+      let v=vol*Math.sin(2*Math.PI*freq*i/SR);
+      if(i<FADE) v*=i/FADE;
+      else if(i>n-FADE) v*=(n-i)/FADE;
+      samples.push(Math.round(v*32767));
+    }
+  };
+  const silence=d=>{ for(let i=0;i<Math.round(SR*d);i++) samples.push(0); };
+  const words=glText.replace(/[[\].,!?;:]/g,'').split(/\s+/);
+  words.forEach((w,wi)=>{
+    [...w].forEach(ch=>{
+      if(VOWEL_FREQ[ch]) sine(VOWEL_FREQ[ch],DUR_V,0.5);
+      else if(CONS_FREQ[ch]) sine(CONS_FREQ[ch],DUR_C,0.35);
+    });
+    if(wi<words.length-1) silence(0.18);
+  });
+  // Pack PCM
+  const buf=new ArrayBuffer(44+samples.length*2);
+  const view=new DataView(buf);
+  const write=(o,v)=>view.setUint32(o,v,true);
+  const write16=(o,v)=>view.setUint16(o,v,true);
+  const str=(o,s)=>[...s].forEach((c,i)=>view.setUint8(o+i,c.charCodeAt(0)));
+  str(0,'RIFF'); write(4,36+samples.length*2); str(8,'WAVE');
+  str(12,'fmt '); write(16,16); write16(20,1); write16(22,1);
+  write(24,SR); write(28,SR*2); write16(32,2); write16(34,16);
+  str(36,'data'); write(40,samples.length*2);
+  samples.forEach((s,i)=>view.setInt16(44+i*2,s,true));
+  return buf;
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI
+// ═══════════════════════════════════════════════════════════
+let _lastGl='', _lastRevGl='';
+
+async function doTranslate(){
+  const txt=document.getElementById('input').value.trim();
+  if(!txt) return;
+  const r=translate(txt);
+
+  // Sprache des Eingabetexts erkennen (ISO 639-3, mind. 10 Zeichen für Zuverlässigkeit)
+  const _fl=window._detectLang?window._detectLang(txt):'und';
+  const detectedLang=(_fl&&_fl!=='und')?_fl:'auto';
+
+  // Unbekannte Wörter beim API registrieren
+  if(r.unknown.length>0 && API_URL){
+    document.getElementById('info').textContent='⏳ Registriere neue Wörter…';
+    for(const word of r.unknown){
+      try{
+        const res=await fetch(API_URL+'/add',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({original:word, lang:detectedLang})
+        });
+        const data=await res.json();
+        // Lokales Fallback im Output ersetzen
+        const fb=fallbackWord(word.toLowerCase());
+        r.gibberlink=r.gibberlink.replace('['+fb+']',data.gl);
+        COMMUNITY_DICT[word.toLowerCase()]=data.gl;
+        COMMUNITY_REV[data.gl]=word;
+        FALLBACK_MAP[data.gl]=word;
+      }catch(e){}
+    }
+  }
+
+  _lastGl=r.gibberlink;
+  const html=r.tokens.map(({gl,known})=>
+    known ? `<span>${gl.replace(/[.,!?;:]/g,'')}</span>`
+          : `<span class="unknown">${gl}</span>`
+  ).join(' ');
+  document.getElementById('output').innerHTML=html+(r.tokens[r.tokens.length-1]?.de?.match(/[.,!?]$/)||'');
+  const info=r.unknown.length
+    ? (API_URL?'☁ Neu im Community-Wörterbuch: ':'⚠ Offline-Fallback: ')+r.unknown.join(', ')
+    : `✓ Vollständig übersetzt · ${r.tokens.length} Token`;
+  document.getElementById('info').textContent=info;
+}
+
+function doPlay(){ if(_lastGl) playGl(_lastGl); }
+function doPlayRev(){ if(_lastRevGl) playGl(_lastRevGl); }
+
+function doDownload(){
+  if(!_lastGl) return;
+  const buf=buildWav(_lastGl);
+  const blob=new Blob([buf],{type:'audio/wav'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='gibberlink.wav';
+  a.click();
+}
+
+function doClear(){
+  document.getElementById('input').value='';
+  document.getElementById('output').textContent='—';
+  document.getElementById('info').textContent='';
+  _lastGl='';
+}
+
+async function doReverse(){
+  const txt=document.getElementById('rev-input').value.trim();
+  if(!txt) return;
+  _lastRevGl=txt;
+  // API-Lookup für Community-Wörter nachladen
+  if(API_URL){
+    const tokens=txt.trim().split(/\s+/);
+    for(const tok of tokens){
+      const clean=tok.replace(/[[\].,!?;:vu]/g,'').replace(/at$/,'').replace(/om$/,'');
+      if(clean && !COMMUNITY_REV[clean]){
+        try{
+          const res=await fetch(API_URL+'/reverse?gl='+encodeURIComponent(clean));
+          if(res.ok){
+            const data=await res.json();
+            COMMUNITY_REV[clean]=data.original;
+            FALLBACK_MAP[clean]=data.original;
+          }
+        }catch(e){}
+      }
+    }
+  }
+  document.getElementById('rev-output').textContent=reverseTranslate(txt);
+}
+
+// Wörterbuch-Vorschau
+const PREVIEW_GROUPS=[
+  ['Pronomen',['ich','du','er','sie','wir']],
+  ['Artikel',['der','die','das','ein']],
+  ['Verben',['sein','haben','gehen','sprechen','lieben']],
+  ['Nomen',['mensch','welt','wasser','sprache','nacht']],
+  ['Zahlen',['null','eins','zwei','drei','zehn']],
+  ['Partikeln',['ja','nein','nicht','und','oder']],
+];
+const prev=document.getElementById('dict-preview');
+PREVIEW_GROUPS.forEach(([label,words])=>{
+  prev.innerHTML+=`<div style="margin-bottom:.5rem"><strong style="color:#8b949e;font-size:.7rem">${label}</strong><br>`
+    +words.map(w=>`<span class="badge">${w}</span><span style="color:#58a6ff;font-size:.78rem">${DICT[w]||'?'}</span>  `).join('')
+    +'</div>';
+});
+
+// ═══════════════════════════════════════════════════════════
+// WAV DECODER — Goertzel-Frequenzanalyse
+// ═══════════════════════════════════════════════════════════
+// Alle bekannten Gibberlink-Frequenzen
+const ALL_FREQS = [
+  {f:330,  ch:'a'}, {f:392,  ch:'e'}, {f:440, ch:'i'}, {f:494, ch:'o'}, {f:523, ch:'u'},
+  {f:659,  ch:'b'}, {f:698,  ch:'d'}, {f:784, ch:'f'}, {f:880, ch:'g'}, {f:988, ch:'k'},
+  {f:1047, ch:'l'}, {f:1109, ch:'m'}, {f:1175,ch:'n'}, {f:1245,ch:'p'}, {f:1319,ch:'r'},
+  {f:1397, ch:'s'}, {f:1480, ch:'t'}, {f:1568,ch:'v'}, {f:1661,ch:'z'}, {f:1760,ch:'x'},
+];
+const ENERGY_THRESH = 0.008; // RMS-Schwelle für Stille
+
+function goertzel(samples, targetFreq, sampleRate) {
+  const N = samples.length;
+  const k = N * targetFreq / sampleRate;
+  const omega = 2 * Math.PI * k / N;
+  const cosW = Math.cos(omega), sinW = Math.sin(omega);
+  let q0=0, q1=0, q2=0;
+  for(let i=0;i<N;i++){ q0=2*cosW*q1-q2+samples[i]; q2=q1; q1=q0; }
+  const real=q1-q2*cosW, imag=q2*sinW;
+  return Math.sqrt(real*real+imag*imag)/N;
+}
+
+function rms(samples) {
+  let s=0; for(const v of samples) s+=v*v;
+  return Math.sqrt(s/samples.length);
+}
+
+async function decodeWav(input) {
+  const file = input.files[0];
+  if(!file) return;
+  document.getElementById('wav-status').textContent = `Analysiere ${file.name}…`;
+  document.getElementById('wav-gl').textContent = '…';
+  document.getElementById('wav-de').textContent = '…';
+
+  try {
+    const arrayBuf = await file.arrayBuffer();
+    const audioBuf = await getCtx().decodeAudioData(arrayBuf);
+    const SR = audioBuf.sampleRate;
+    const pcm = audioBuf.getChannelData(0);
+    const WIN = Math.round(SR * 0.025); // 25ms Fenster
+
+    const phonemes=[], silences=[];
+    let i=0;
+    while(i+WIN <= pcm.length){
+      const win = pcm.subarray(i, i+WIN);
+      const energy = rms(win);
+      if(energy < ENERGY_THRESH){
+        phonemes.push(null); // Stille
+      } else {
+        // Goertzel bei allen Kandidaten
+        let best=null, bestMag=-1;
+        for(const {f,ch} of ALL_FREQS){
+          const mag=goertzel(win,f,SR);
+          if(mag>bestMag){ bestMag=mag; best=ch; }
+        }
+        phonemes.push(best);
+      }
+      i+=WIN;
+    }
+
+    // Runs deduplizieren: gleiche aufeinanderfolgende Phoneme → einmal
+    const deduped=[];
+    let prev=null, silenceRun=0;
+    for(const p of phonemes){
+      if(p===null){
+        silenceRun++;
+        if(silenceRun===3 && prev!==null) { deduped.push(' '); prev=null; } // Wortgrenze
+      } else {
+        silenceRun=0;
+        if(p!==prev){ deduped.push(p); prev=p; }
+      }
+    }
+
+    // Wörter zusammenbauen und bereinigen
+    const glText = deduped.join('').replace(/\s+/g,' ').trim();
+    const glWords = glText.split(' ').filter(w=>w.length>0).join(' ');
+
+    document.getElementById('wav-gl').textContent = glWords||'(kein Signal erkannt)';
+    if(glWords){
+      const rev = reverseTranslate(glWords);
+      document.getElementById('wav-de').textContent = rev;
+      document.getElementById('wav-status').textContent =
+        `✓ ${Math.round(audioBuf.duration*1000)}ms · ${SR}Hz · ${glWords.split(' ').length} Wort/Wörter erkannt`;
+    } else {
+      document.getElementById('wav-de').textContent = '—';
+      document.getElementById('wav-status').textContent = '⚠ Kein Gibberlink-Signal in dieser Datei gefunden.';
+    }
+  } catch(e) {
+    document.getElementById('wav-status').textContent = '✗ Fehler: ' + e.message;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// GGWAVE — Live-Übertragung
+// ═══════════════════════════════════════════════════════════
+let _ggw=null, _ggw_inst=null;
+let _receiving=false, _recv_proc=null, _recv_stream=null;
+
+function convertTypedArray(src, type){
+  const buf=new ArrayBuffer(src.byteLength);
+  new src.constructor(buf).set(src);
+  return new type(buf);
+}
+
+async function initGGwave(){
+  if(_ggw_inst) return true;
+  try{
+    if(typeof ggwave_factory==='undefined') throw new Error('Bibliothek noch nicht geladen');
+    const ctx=getCtx();
+    const ggw=await ggwave_factory();
+    const p=ggw.getDefaultParameters();
+    p.sampleRateInp=ctx.sampleRate;
+    p.sampleRateOut=ctx.sampleRate;
+    p.soundMarkerThreshold=4;
+    _ggw=ggw;
+    _ggw_inst=ggw.init(p);
+    document.getElementById('gg-status').textContent='✓ GGwave bereit.';
+    return true;
+  }catch(e){
+    document.getElementById('gg-status').textContent='✗ '+e.message;
+    return false;
+  }
+}
+
+async function doGGSend(){
+  const glText=(_lastGl||'').replace(/\[.*?\]/g,'').trim();
+  if(!glText){ document.getElementById('gg-status').textContent='⚠ Erst übersetzen!'; return; }
+  if(!await initGGwave()) return;
+  const ctx=getCtx();
+  if(ctx.state==='suspended') ctx.resume();
+  try{
+    const waveform=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST, 10);
+    const samples=new Float32Array(waveform.length/2);
+    const view=new DataView(waveform.buffer, waveform.byteOffset);
+    for(let i=0;i<samples.length;i++) samples[i]=view.getInt16(i*2,true)/32768.0;
+    const audioBuf=ctx.createBuffer(1,samples.length,ctx.sampleRate);
+    audioBuf.getChannelData(0).set(samples);
+    const src=ctx.createBufferSource();
+    src.buffer=audioBuf; src.connect(ctx.destination); src.start();
+    const ms=Math.round(samples.length/ctx.sampleRate*1000);
+    document.getElementById('gg-status').textContent=`📡 Sende: "${glText}" (${ms}ms)…`;
+    src.onended=()=>{ document.getElementById('gg-status').textContent=`✓ Gesendet.`; };
+  }catch(e){ document.getElementById('gg-status').textContent='✗ '+e.message; }
+}
+
+async function toggleReceive(){
+  const btn=document.getElementById('btn-recv');
+  if(_receiving){
+    _receiving=false;
+    if(_recv_proc){ _recv_proc.disconnect(); _recv_proc=null; }
+    if(_recv_stream){ _recv_stream.getTracks().forEach(t=>t.stop()); _recv_stream=null; }
+    btn.textContent='🎙 Empfangen';
+    btn.className='btn-secondary';
+    document.getElementById('gg-status').textContent='Empfang gestoppt.';
+    return;
+  }
+  if(!await initGGwave()) return;
+  try{
+    _recv_stream=await navigator.mediaDevices.getUserMedia({
+      audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}, video:false
+    });
+  }catch(e){
+    document.getElementById('gg-status').textContent='✗ Mikrofon-Zugriff verweigert (HTTPS erforderlich)';
+    return;
+  }
+  const ctx=getCtx();
+  if(ctx.state==='suspended') ctx.resume();
+  const source=ctx.createMediaStreamSource(_recv_stream);
+  _recv_proc=ctx.createScriptProcessor(1024,1,1);
+  _recv_proc.onaudioprocess=e=>{
+    const f32=new Float32Array(e.inputBuffer.getChannelData(0));
+    const res=_ggw.decode(_ggw_inst, convertTypedArray(f32, Int8Array));
+    if(res && res.length>0){
+      const gl=res.trim();
+      document.getElementById('gg-gl').textContent=gl;
+      document.getElementById('gg-de').textContent=reverseTranslate(gl);
+      document.getElementById('gg-recv-panel').style.display='block';
+      _lastRevGl=gl;
+    }
+  };
+  source.connect(_recv_proc);
+  _recv_proc.connect(ctx.destination);
+  _receiving=true;
+  btn.textContent='⏹ Stop'; btn.className='btn-primary';
+  document.getElementById('gg-status').textContent='🎙 Höre zu…';
+  document.getElementById('gg-recv-panel').style.display='block';
+}
+
+// GGwave nach Laden initialisieren
+window.addEventListener('load', ()=>{
+  setTimeout(()=>{
+    if(typeof ggwave_factory!=='undefined'){
+      document.getElementById('gg-status').textContent='Bereit — klicke Senden oder Empfangen.';
+    } else {
+      document.getElementById('gg-status').textContent='⚠ GGwave offline nicht verfügbar (CDN nötig).';
+    }
+  }, 1500);
+});
+
+// Enter-Shortcut
+document.getElementById('input').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();doTranslate();} });
+document.getElementById('rev-input').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();doReverse();} });
+</script>
+</body>
+</html>

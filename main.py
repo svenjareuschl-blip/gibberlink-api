@@ -1,5 +1,6 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
+import os
 import pg8000.dbapi
 import urllib.parse
 import os
@@ -58,6 +59,10 @@ def generate_gl_word(original: str, attempt: int = 0) -> str:
     return word
 
 # ── Endpunkte ─────────────────────────────────────────────────────────────────
+@app.get("/")
+def index():
+    return send_file(os.path.join(os.path.dirname(__file__), "gibberlink.html"))
+
 @app.get("/health")
 def health():
     return jsonify({"ok": True})
