@@ -685,7 +685,15 @@ const ALL_FREQS = [
   {f:1047, ch:'l'}, {f:1109, ch:'m'}, {f:1175,ch:'n'}, {f:1245,ch:'p'}, {f:1319,ch:'r'},
   {f:1397, ch:'s'}, {f:1480, ch:'t'}, {f:1568,ch:'v'}, {f:1661,ch:'z'}, {f:1760,ch:'x'},
 ];
-const ENERGY_THRESH = 0.008; // RMS-Schwelle für Stille
+const ENERGY_THRESH = 0.008; // RMS-Schwelle für Stille (WAV-Decoder)
+
+// Live-Frequenzen: verschobene Vokale (2000-2600 Hz) + normale Konsonanten
+const LIVE_FREQS = [
+  {f:2000,ch:'a'},{f:2150,ch:'e'},{f:2300,ch:'i'},{f:2450,ch:'o'},{f:2600,ch:'u'},
+  {f:659, ch:'b'},{f:698, ch:'d'},{f:784, ch:'f'},{f:880, ch:'g'},{f:988, ch:'k'},
+  {f:1047,ch:'l'},{f:1109,ch:'m'},{f:1175,ch:'n'},{f:1245,ch:'p'},{f:1319,ch:'r'},
+  {f:1397,ch:'s'},{f:1480,ch:'t'},{f:1568,ch:'v'},{f:1661,ch:'z'},{f:1760,ch:'x'},
+];
 
 function goertzel(samples, targetFreq, sampleRate) {
   const N = samples.length;
@@ -896,31 +904,9 @@ window.addEventListener('load', ()=>{
 // ═══════════════════════════════════════════════════════════
 // PHONEM LIVE — Echtzeit Senden & Empfangen
 // ═══════════════════════════════════════════════════════════
-function goertzelMag(samples, freq, sr){
-  const N=samples.length;
-  const k=Math.round(N*freq/sr);
-  const w=2*Math.PI*k/N;
-  const c=2*Math.cos(w);
-  let q1=0,q2=0;
-  for(let i=0;i<N;i++){const q=c*q1-q2+samples[i];q2=q1;q1=q;}
-  return Math.sqrt(Math.max(0,q1*q1+q2*q2-q1*q2*c));
-}
-
-function detectBestPhoneme(samples, sr){
-  const rms=Math.sqrt(samples.reduce((s,x)=>s+x*x,0)/samples.length);
-  if(rms<0.015) return null;
-  // Verwende LIVE_VOWEL (2000-2600 Hz) statt VOWEL_FREQ um Oberton-Konflikte zu vermeiden
-  const all={...LIVE_VOWEL,...CONS_FREQ};
-  let maxM=0, best=null;
-  for(const [ch,freq] of Object.entries(all)){
-    const m=goertzelMag(samples,freq,sr);
-    if(m>maxM){maxM=m;best=ch;}
-  }
-  return best;
-}
-
 let _phonRecv=false,_phonProc=null,_phonStream=null;
-let _prevPhon=null,_phonWord='',_phonText='',_silFrames=0;
+let _phonBuf=new Float32Array(0),_phonWord='',_phonText='';
+let _phonPrev=null,_phonSilRun=0;
 
 function doPhonSend(){
   if(!_lastGl){document.getElementById('phon-status').textContent='⚠ Erst übersetzen!';return;}
@@ -952,25 +938,52 @@ async function togglePhonReceive(){
   }
   const ctx=getCtx();
   if(ctx.state!=='running') await ctx.resume();
+  const SR=ctx.sampleRate;
+  const WIN=Math.round(SR*0.025); // 25ms — identisch mit WAV-Decoder
   const source=ctx.createMediaStreamSource(_phonStream);
-  _phonProc=ctx.createScriptProcessor(4096,1,1);
-  _prevPhon=null;_phonWord='';_phonText='';_silFrames=0;
+  _phonProc=ctx.createScriptProcessor(1024,1,1);
+  _phonBuf=new Float32Array(0);_phonWord='';_phonText='';_phonPrev=null;_phonSilRun=0;
+
   _phonProc.onaudioprocess=e=>{
-    const samples=Array.from(e.inputBuffer.getChannelData(0));
-    const ph=detectBestPhoneme(samples,ctx.sampleRate);
-    if(ph===null){
-      _silFrames++;
-      if(_silFrames>=2&&_phonWord){
-        _phonText+=(_phonText?' ':'')+_phonWord;
-        _phonWord='';_prevPhon=null;
-        updatePhonDisplay();
+    // Frames akkumulieren
+    const inc=e.inputBuffer.getChannelData(0);
+    const merged=new Float32Array(_phonBuf.length+inc.length);
+    merged.set(_phonBuf); merged.set(inc,_phonBuf.length);
+    _phonBuf=merged;
+
+    // Vollständige 25ms-Fenster verarbeiten (WAV-Decoder-Logik)
+    while(_phonBuf.length>=WIN){
+      const win=_phonBuf.subarray(0,WIN);
+      const energy=Math.sqrt(win.reduce((s,x)=>s+x*x,0)/WIN);
+
+      let ph=null;
+      if(energy>=ENERGY_THRESH){
+        let bestMag=-1;
+        for(const {f,ch} of LIVE_FREQS){
+          const mag=goertzel(win,f,SR);
+          if(mag>bestMag){bestMag=mag;ph=ch;}
+        }
       }
-    }else{
-      _silFrames=0;
-      if(ph!==_prevPhon){_phonWord+=ph;_prevPhon=ph;
-        document.getElementById('phon-status').textContent='🎙 …'+_phonWord;}
+
+      if(ph===null){
+        _phonSilRun++;
+        // 4 × 25ms = 100ms Stille → Wortgrenze (GL-Gap ist 300ms)
+        if(_phonSilRun>=4&&_phonWord){
+          _phonText+=(_phonText?' ':'')+_phonWord;
+          _phonWord='';_phonPrev=null;
+          updatePhonDisplay();
+        }
+      }else{
+        _phonSilRun=0;
+        if(ph!==_phonPrev){
+          _phonWord+=ph;_phonPrev=ph;
+          document.getElementById('phon-status').textContent='🎙 …'+_phonWord;
+        }
+      }
+      _phonBuf=new Float32Array(_phonBuf.subarray(WIN));
     }
   };
+
   source.connect(_phonProc);
   _phonProc.connect(ctx.destination);
   _phonRecv=true;
