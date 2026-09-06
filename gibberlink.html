@@ -788,6 +788,8 @@ async function initGGwave(){
     p.soundMarkerThreshold=4;
     _ggw_inst=_ggw.init(p);
     console.log('initGGwave: inst=',_ggw_inst,'sampleRate=',ctx.sampleRate);
+    console.log('ggwave keys:', Object.keys(_ggw).filter(k=>!k.startsWith('_')).join(', '));
+    console.log('TxProtocolId:', JSON.stringify(_ggw.TxProtocolId), 'ProtocolId:', JSON.stringify(_ggw.ProtocolId));
     document.getElementById('gg-status').textContent='✓ GGwave bereit.';
     return true;
   }catch(e){
@@ -804,13 +806,32 @@ async function doGGSend(){
   const ctx=getCtx();
   if(ctx.state==='suspended') await ctx.resume();
   try{
+    // Test 1: README-style offline decode (TxProtocolId, same instance, raw waveform)
+    {
+      const txProto=_ggw.TxProtocolId ? _ggw.TxProtocolId.GGWAVE_TX_PROTOCOL_AUDIBLE_FAST : _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST;
+      const tw=_ggw.encode(_ggw_inst, glText, txProto, 10);
+      const tr=_ggw.decode(_ggw_inst, tw);
+      console.log('README-self-test TxProto: waveLen=',tw?tw.byteLength:0,'decodeLen=',tr?tr.length:0, tr&&tr.length>0 ? '✓ '+new TextDecoder().decode(tr) : '✗');
+    }
     const protocolId=_ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST.value;
     const waveformRaw=_ggw.encode(_ggw_inst, glText, protocolId, 100);
     const waveform=waveformRaw.slice();
     console.log('encode: byteLength=',waveform.byteLength,'protocol=',protocolId);
+    // Test 2: raw waveform decode (Int16 bytes, no conversion)
+    {const tr2=_ggw.decode(_ggw_inst, waveform); console.log('raw-waveform decode: len=',tr2?tr2.length:0, tr2&&tr2.length>0?'✓ '+new TextDecoder().decode(tr2):'✗');}
     const samples=new Float32Array(waveform.byteLength/2);
     {const v=new DataView(waveform.buffer); for(let i=0;i<samples.length;i++) samples[i]=v.getInt16(i*2,true)/32768.0;}
     console.log('samples=',samples.length,'max=',Math.max(...samples.slice(0,256)).toFixed(4));
+    // Test 3: Float32 chunks (same as live decode path)
+    {
+      let ok=false;
+      const cs=1024;
+      for(let i=0;i<samples.length-cs;i+=cs){
+        const r=_ggw.decode(_ggw_inst,convertTypedArray(samples.slice(i,i+cs),Int8Array));
+        if(r&&r.length>0){console.log('Float32-chunk decode OK at chunk '+(i/cs)+':',new TextDecoder().decode(r));ok=true;break;}
+      }
+      if(!ok) console.warn('Float32-chunk decode ✗ (all chunks returned 0)');
+    }
     const audioBuf=ctx.createBuffer(1,samples.length,ctx.sampleRate);
     audioBuf.getChannelData(0).set(samples);
     const src=ctx.createBufferSource();
