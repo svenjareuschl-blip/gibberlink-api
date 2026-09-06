@@ -849,7 +849,7 @@ async function toggleReceive(){
     const res=_ggw.decode(_ggw_inst, convertTypedArray(f32, Int8Array));
     if(++_ggDbg%200===0) console.log('ggw rms=',Math.sqrt(f32.reduce((s,x)=>s+x*x,0)/f32.length).toFixed(4),'res=',res);
     if(res && res.length>0){
-      const gl=res.trim();
+      const gl=(res instanceof Int8Array ? new TextDecoder().decode(res) : String(res)).trim();
       document.getElementById('gg-gl').textContent=gl;
       document.getElementById('gg-de').textContent=reverseTranslate(gl);
       document.getElementById('gg-recv-panel').style.display='block';
