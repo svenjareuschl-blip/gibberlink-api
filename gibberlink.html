@@ -827,7 +827,10 @@ async function toggleReceive(){
     document.getElementById('gg-status').textContent='Empfang gestoppt.';
     return;
   }
+  // Frische Instanz bei jedem Empfang — kein alter State
+  _ggw_inst=null;
   if(!await initGGwave()) return;
+  console.log('GGwave Empfangen gestartet, sampleRate:', getCtx().sampleRate);
   try{
     _recv_stream=await navigator.mediaDevices.getUserMedia({
       audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}, video:false
@@ -843,6 +846,7 @@ async function toggleReceive(){
   _recv_proc.onaudioprocess=e=>{
     const f32=new Float32Array(e.inputBuffer.getChannelData(0));
     const res=_ggw.decode(_ggw_inst, convertTypedArray(f32, Int8Array));
+    if(res && res.length>0) console.log('GGwave res len='+res.length, res instanceof Int8Array ? new TextDecoder().decode(res) : res);
     if(res && res.length>0){
       const gl=(res instanceof Int8Array ? new TextDecoder().decode(res) : String(res)).trim();
       if(gl){ document.getElementById('gg-gl').textContent=gl;
