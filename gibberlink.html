@@ -767,9 +767,8 @@ async function decodeWav(input) {
 // ═══════════════════════════════════════════════════════════
 // GGWAVE — Live-Übertragung
 // ═══════════════════════════════════════════════════════════
-let _ggw=null, _ggw_inst=null;
+let _ggw=null, _ggw_inst=null, _ggw_recv_inst=null;
 let _receiving=false, _recv_proc=null, _recv_stream=null;
-let _recordedSamples=[];
 
 function convertTypedArray(src, type){
   const buf=new ArrayBuffer(src.byteLength);
@@ -778,18 +777,17 @@ function convertTypedArray(src, type){
 }
 
 async function initGGwave(){
-  if(_ggw_inst) return true;
+  if(_ggw_inst !== null) return true;
   try{
     if(typeof ggwave_factory==='undefined') throw new Error('Bibliothek noch nicht geladen');
     const ctx=getCtx();
-    console.log('initGGwave: factory exists=', !!_ggw, 'sampleRate=', ctx.sampleRate);
     if(!_ggw) _ggw=await ggwave_factory();
     const p=_ggw.getDefaultParameters();
     p.sampleRateInp=ctx.sampleRate;
     p.sampleRateOut=ctx.sampleRate;
     p.soundMarkerThreshold=4;
     _ggw_inst=_ggw.init(p);
-    console.log('initGGwave: inst=', _ggw_inst);
+    console.log('initGGwave: inst=',_ggw_inst,'sampleRate=',ctx.sampleRate);
     document.getElementById('gg-status').textContent='✓ GGwave bereit.';
     return true;
   }catch(e){
@@ -804,28 +802,15 @@ async function doGGSend(){
   if(!glText){ document.getElementById('gg-status').textContent='⚠ Erst übersetzen!'; return; }
   if(!await initGGwave()) return;
   const ctx=getCtx();
-  if(ctx.state==='suspended') ctx.resume();
+  if(ctx.state==='suspended') await ctx.resume();
   try{
-    // Waveform encodieren — sofort in JS-Heap kopieren (verhindert WASM-Memory-Invalidierung)
-    const waveformRaw=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST, 100);
-    const waveform=waveformRaw.slice(); // JS-Heap-Kopie, unabhängig von WASM-Heap
-    console.log('waveform byteLength=',waveform.byteLength);
-    // Int16→Float32 Konvertierung (korrekt, max≈0.98 bestätigt)
+    const protocolId=_ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST.value;
+    const waveformRaw=_ggw.encode(_ggw_inst, glText, protocolId, 100);
+    const waveform=waveformRaw.slice();
+    console.log('encode: byteLength=',waveform.byteLength,'protocol=',protocolId);
     const samples=new Float32Array(waveform.byteLength/2);
     {const v=new DataView(waveform.buffer); for(let i=0;i<samples.length;i++) samples[i]=v.getInt16(i*2,true)/32768.0;}
     console.log('samples=',samples.length,'max=',Math.max(...samples.slice(0,256)).toFixed(4));
-    // Selbsttest: encode→decode ohne Luft
-    {
-      const tp=_ggw.getDefaultParameters(); tp.sampleRateInp=ctx.sampleRate; tp.sampleRateOut=ctx.sampleRate; tp.soundMarkerThreshold=1;
-      const ti=_ggw.init(tp);
-      console.log('samplesPerFrame from defaults:', tp.samplesPerFrame);
-      const cs=1024; let ok=false;
-      for(let i=0;i<samples.length-cs;i+=cs){
-        const r=_ggw.decode(ti,convertTypedArray(samples.slice(i,i+cs),Int8Array));
-        if(r&&r.length>0){console.log('SELBSTTEST OK:',new TextDecoder().decode(r));ok=true;break;}
-      }
-      if(!ok) console.warn('SELBSTTEST FEHLER');
-    }
     const audioBuf=ctx.createBuffer(1,samples.length,ctx.sampleRate);
     audioBuf.getChannelData(0).set(samples);
     const src=ctx.createBufferSource();
@@ -833,81 +818,60 @@ async function doGGSend(){
     const ms=Math.round(samples.length/ctx.sampleRate*1000);
     document.getElementById('gg-status').textContent=`📡 Sende: "${glText}" (${ms}ms)…`;
     src.onended=()=>{ document.getElementById('gg-status').textContent=`✓ Gesendet.`; };
-  }catch(e){ document.getElementById('gg-status').textContent='✗ '+e.message; }
-}
-
-function decodeRecordedBuffer(){
-  document.getElementById('gg-status').textContent='Analysiere Aufnahme…';
-  if(_recordedSamples.length===0){
-    document.getElementById('gg-status').textContent='Keine Aufnahme vorhanden.';
-    return;
-  }
-  const total=_recordedSamples.reduce((s,c)=>s+c.length,0);
-  console.log('decodeRecordedBuffer: samples='+total+' ('+((total/48000).toFixed(1))+'s)');
-  const all=new Float32Array(total);
-  let off=0; for(const c of _recordedSamples){all.set(c,off);off+=c.length;}
-  const chunkSize=1024;
-  let found=null;
-  for(let i=0;i<all.length-chunkSize;i+=chunkSize){
-    const res=_ggw.decode(_ggw_inst,convertTypedArray(all.slice(i,i+chunkSize),Int8Array));
-    if(res&&res.length>0){
-      found=new TextDecoder().decode(res).trim();
-      console.log('decodeRecordedBuffer: found at chunk '+(i/chunkSize), found);
-      if(found) break;
-    }
-  }
-  if(found){
-    document.getElementById('gg-gl').textContent=found;
-    document.getElementById('gg-de').textContent=reverseTranslate(found);
-    document.getElementById('gg-recv-panel').style.display='block';
-    _lastRevGl=found;
-    document.getElementById('gg-status').textContent='✓ Empfangen: "'+found+'"';
-  }else{
-    document.getElementById('gg-status').textContent='Nichts erkannt — Handy näher halten und lauter stellen?';
-    console.log('decodeRecordedBuffer: nothing found');
-  }
+  }catch(e){ document.getElementById('gg-status').textContent='✗ '+e.message; console.error(e); }
 }
 
 async function toggleReceive(){
-  console.log('toggleReceive: _receiving=', _receiving, '_ggw=', !!_ggw, '_ggw_inst=', !!_ggw_inst);
   const btn=document.getElementById('btn-recv');
   if(_receiving){
     _receiving=false;
     if(_recv_proc){ _recv_proc.disconnect(); _recv_proc=null; }
     if(_recv_stream){ _recv_stream.getTracks().forEach(t=>t.stop()); _recv_stream=null; }
+    _ggw_recv_inst=null;
     btn.textContent='🎙 Empfangen';
     btn.className='btn-secondary';
-    decodeRecordedBuffer();
+    document.getElementById('gg-status').textContent='Empfang gestoppt.';
     return;
   }
-  _ggw_inst=null;
-  console.log('toggleReceive: calling initGGwave...');
-  if(!await initGGwave()){ console.log('toggleReceive: initGGwave FAILED'); return; }
-  console.log('GGwave Empfangen gestartet, sampleRate:', getCtx().sampleRate);
+  if(!await initGGwave()) return;
   try{
     _recv_stream=await navigator.mediaDevices.getUserMedia({
       audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}, video:false
     });
   }catch(e){
-    document.getElementById('gg-status').textContent='✗ Mikrofon-Zugriff verweigert (HTTPS erforderlich)';
+    document.getElementById('gg-status').textContent='✗ Mikrofon: '+e.message;
     return;
   }
   const ctx=getCtx();
-  if(ctx.state==='suspended') ctx.resume();
+  if(ctx.state==='suspended') await ctx.resume();
+  // Dedizierte Empfangs-Instanz (unabhängig von Sende-Instanz)
+  const rp=_ggw.getDefaultParameters();
+  rp.sampleRateInp=ctx.sampleRate; rp.sampleRateOut=ctx.sampleRate; rp.soundMarkerThreshold=4;
+  _ggw_recv_inst=_ggw.init(rp);
+  console.log('toggleReceive: recv_inst=',_ggw_recv_inst,'sampleRate=',ctx.sampleRate);
   const source=ctx.createMediaStreamSource(_recv_stream);
-  _recv_proc=ctx.createScriptProcessor(4096,1,1);
-  _recordedSamples=[];
-  let _dbgFrames=0;
+  // 1024 Samples/Frame — exakt was GGwave erwartet (samplesPerFrame=1024)
+  _recv_proc=ctx.createScriptProcessor(1024,1,1);
+  let frameCount=0;
   _recv_proc.onaudioprocess=e=>{
     const f32=new Float32Array(e.inputBuffer.getChannelData(0));
-    _recordedSamples.push(new Float32Array(f32));
-    _dbgFrames++;
-    if(_dbgFrames%25===0){
+    frameCount++;
+    if(frameCount%200===0){
       const rms=Math.sqrt(f32.reduce((s,x)=>s+x*x,0)/f32.length);
-      console.log('GGwave rms='+rms.toFixed(4)+' frames='+_dbgFrames);
+      console.log('GGwave recv frame='+frameCount+' rms='+rms.toFixed(4));
     }
-    const total=_recordedSamples.reduce((s,c)=>s+c.length,0);
-    document.getElementById('gg-status').textContent='🔴 Aufnehmen: '+((total/ctx.sampleRate).toFixed(1))+'s — dann Stop';
+    const res=_ggw.decode(_ggw_recv_inst, convertTypedArray(f32, Int8Array));
+    if(res&&res.length>0){
+      const gl=new TextDecoder().decode(res).trim();
+      if(gl){
+        document.getElementById('gg-gl').textContent=gl;
+        document.getElementById('gg-de').textContent=reverseTranslate(gl);
+        document.getElementById('gg-recv-panel').style.display='block';
+        _lastRevGl=gl;
+        document.getElementById('gg-status').textContent='✓ Empfangen: "'+gl+'"';
+        console.log('GGwave DECODED:', gl);
+      }
+    }
   };
   const recvSilence=ctx.createGain(); recvSilence.gain.value=0;
   source.connect(_recv_proc);
@@ -915,8 +879,7 @@ async function toggleReceive(){
   recvSilence.connect(ctx.destination);
   _receiving=true;
   btn.textContent='⏹ Stop'; btn.className='btn-primary';
-  document.getElementById('gg-status').textContent='🔴 Aufnehmen… dann Stop klicken';
-  document.getElementById('gg-recv-panel').style.display='block';
+  document.getElementById('gg-status').textContent='🎙 Höre zu… (GGwave-Ton abspielen)';
 }
 
 // GGwave nach Laden initialisieren
