@@ -851,8 +851,10 @@ async function toggleReceive(){
       _lastRevGl=gl;
     }
   };
+  const _recvSilence=ctx.createGain(); _recvSilence.gain.value=0;
   source.connect(_recv_proc);
-  _recv_proc.connect(ctx.destination);
+  _recv_proc.connect(_recvSilence);
+  _recvSilence.connect(ctx.destination);
   _receiving=true;
   btn.textContent='⏹ Stop'; btn.className='btn-primary';
   document.getElementById('gg-status').textContent='🎙 Höre zu…';
@@ -948,8 +950,10 @@ async function togglePhonReceive(){
         document.getElementById('phon-status').textContent='🎙 …'+_phonWord;}
     }
   };
+  const _phonSilence=ctx.createGain(); _phonSilence.gain.value=0;
   source.connect(_phonProc);
-  _phonProc.connect(ctx.destination);
+  _phonProc.connect(_phonSilence);
+  _phonSilence.connect(ctx.destination);
   _phonRecv=true;
   btn.textContent='⏹ Stop';btn.className='btn-primary';
   document.getElementById('phon-status').textContent='🎙 Höre zu…';
