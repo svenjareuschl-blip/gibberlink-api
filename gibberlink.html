@@ -787,7 +787,7 @@ async function initGGwave(){
     const p=ggw.getDefaultParameters();
     p.sampleRateInp=ctx.sampleRate;
     p.sampleRateOut=ctx.sampleRate;
-    p.soundMarkerThreshold=2;
+    p.soundMarkerThreshold=1;
     _ggw=ggw;
     _ggw_inst=ggw.init(p);
     document.getElementById('gg-status').textContent='✓ GGwave bereit.';
@@ -805,7 +805,7 @@ async function doGGSend(){
   const ctx=getCtx();
   if(ctx.state==='suspended') ctx.resume();
   try{
-    const waveform=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST, 50);
+    const waveform=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST, 100);
     const samples=new Float32Array(waveform.length/2);
     const view=new DataView(waveform.buffer, waveform.byteOffset);
     for(let i=0;i<samples.length;i++) samples[i]=view.getInt16(i*2,true)/32768.0;
