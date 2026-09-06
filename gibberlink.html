@@ -362,7 +362,7 @@ const DUR_V_L=0.15, DUR_C_L=0.10, DUR_GAP_L=0.30;
 const LFO_RATE=5.5; // Hz — Vibrato-Geschwindigkeit
 
 let _ctx=null;
-function getCtx(){ if(!_ctx) _ctx=new (window.AudioContext||window.webkitAudioContext)(); return _ctx; }
+function getCtx(){ if(!_ctx) _ctx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:48000}); return _ctx; }
 
 function setSlider(id, val, lblId, fmt){
   const el=document.getElementById(id); el.value=val;
@@ -780,16 +780,18 @@ async function initGGwave(){
   try{
     if(typeof ggwave_factory==='undefined') throw new Error('Bibliothek noch nicht geladen');
     const ctx=getCtx();
-    const ggw=await ggwave_factory();
-    const p=ggw.getDefaultParameters();
+    console.log('initGGwave: factory exists=', !!_ggw, 'sampleRate=', ctx.sampleRate);
+    if(!_ggw) _ggw=await ggwave_factory();
+    const p=_ggw.getDefaultParameters();
     p.sampleRateInp=ctx.sampleRate;
     p.sampleRateOut=ctx.sampleRate;
     p.soundMarkerThreshold=1;
-    _ggw=ggw;
-    _ggw_inst=ggw.init(p);
+    _ggw_inst=_ggw.init(p);
+    console.log('initGGwave: inst=', _ggw_inst);
     document.getElementById('gg-status').textContent='✓ GGwave bereit.';
     return true;
   }catch(e){
+    console.error('initGGwave error:', e);
     document.getElementById('gg-status').textContent='✗ '+e.message;
     return false;
   }
@@ -817,6 +819,7 @@ async function doGGSend(){
 }
 
 async function toggleReceive(){
+  console.log('toggleReceive: _receiving=', _receiving, '_ggw=', !!_ggw, '_ggw_inst=', !!_ggw_inst);
   const btn=document.getElementById('btn-recv');
   if(_receiving){
     _receiving=false;
@@ -827,9 +830,10 @@ async function toggleReceive(){
     document.getElementById('gg-status').textContent='Empfang gestoppt.';
     return;
   }
-  // Frische Instanz bei jedem Empfang — kein alter State
+  // Frische Decode-Instanz (Factory nur einmal laden)
   _ggw_inst=null;
-  if(!await initGGwave()) return;
+  console.log('toggleReceive: calling initGGwave...');
+  if(!await initGGwave()){ console.log('toggleReceive: initGGwave FAILED'); return; }
   console.log('GGwave Empfangen gestartet, sampleRate:', getCtx().sampleRate);
   try{
     _recv_stream=await navigator.mediaDevices.getUserMedia({
