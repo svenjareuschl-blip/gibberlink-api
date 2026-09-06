@@ -358,7 +358,7 @@ const CONS_FREQ   = {b:659,d:698,f:784,g:880,k:988,l:1047,m:1109,n:1175,p:1245,r
 const DUR_V=0.13, DUR_C=0.065, DUR_GAP=0.10;
 // Live-Phonem: Vokale oberhalb aller Konsonanten (Handy-Lautsprecher, keine Oberton-Konflikte)
 const LIVE_VOWEL  = {a:2000,e:2150,i:2300,o:2450,u:2600};
-const DUR_V_L=0.22, DUR_C_L=0.18, DUR_GAP_L=0.50;
+const DUR_V_L=0.15, DUR_C_L=0.10, DUR_GAP_L=0.30;
 const LFO_RATE=5.5; // Hz — Vibrato-Geschwindigkeit
 
 let _ctx=null;
@@ -843,11 +843,9 @@ async function toggleReceive(){
   if(ctx.state==='suspended') ctx.resume();
   const source=ctx.createMediaStreamSource(_recv_stream);
   _recv_proc=ctx.createScriptProcessor(1024,1,1);
-  let _ggDbg=0;
   _recv_proc.onaudioprocess=e=>{
     const f32=new Float32Array(e.inputBuffer.getChannelData(0));
     const res=_ggw.decode(_ggw_inst, convertTypedArray(f32, Int8Array));
-    if(++_ggDbg%200===0) console.log('ggw rms=',Math.sqrt(f32.reduce((s,x)=>s+x*x,0)/f32.length).toFixed(4),'res=',res);
     if(res && res.length>0){
       const gl=(res instanceof Int8Array ? new TextDecoder().decode(res) : String(res)).trim();
       document.getElementById('gg-gl').textContent=gl;
@@ -944,7 +942,7 @@ async function togglePhonReceive(){
     const ph=detectBestPhoneme(samples,ctx.sampleRate);
     if(ph===null){
       _silFrames++;
-      if(_silFrames>=3&&_phonWord){
+      if(_silFrames>=2&&_phonWord){
         _phonText+=(_phonText?' ':'')+_phonWord;
         _phonWord='';_prevPhon=null;
         updatePhonDisplay();
