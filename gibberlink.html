@@ -843,6 +843,8 @@ async function toggleReceive(){
     document.getElementById('gg-status').textContent='Empfang gestoppt.';
     return;
   }
+  // Immer frische Instanz für Empfang (kein Encode-State-Konflikt)
+  _ggw_inst=null;
   if(!await initGGwave()) return;
   try{
     _recv_stream=await navigator.mediaDevices.getUserMedia({
@@ -858,16 +860,20 @@ async function toggleReceive(){
   const source=ctx.createMediaStreamSource(_recv_stream);
   _recv_proc=ctx.createScriptProcessor(1024,1,1);
   let frameCount=0;
+  const statusEl=document.getElementById('gg-status');
   _recv_proc.onaudioprocess=e=>{
     const f32=new Float32Array(e.inputBuffer.getChannelData(0));
     frameCount++;
+    const rmsVal=Math.sqrt(f32.reduce((s,x)=>s+x*x,0)/f32.length);
     // Float32→Int16 PCM: ggwave decode erwartet Int16, nicht Float32-Bytes
     const int16=new Int16Array(f32.length);
     for(let i=0;i<f32.length;i++) int16[i]=Math.round(f32[i]*32767);
-    const res=_ggw.decode(_ggw_inst, convertTypedArray(int16, Int8Array));
-    if(frameCount%200===0){
-      const rms=Math.sqrt(f32.reduce((s,x)=>s+x*x,0)/f32.length);
-      console.log('GGwave recv frame='+frameCount+' rms='+rms.toFixed(4)+' decLen='+res.length);
+    let res;
+    try{ res=_ggw.decode(_ggw_inst, convertTypedArray(int16, Int8Array)); }
+    catch(err){ console.error('ggwave.decode error:',err); return; }
+    if(frameCount%20===0){
+      console.log('GGwave recv frame='+frameCount+' rms='+rmsVal.toFixed(4)+' decLen='+(res?res.length:0));
+      statusEl.textContent='🎙 Höre zu… Signal: '+rmsVal.toFixed(4);
     }
     if(res&&res.length>0){
       const gl=new TextDecoder().decode(res).trim();
