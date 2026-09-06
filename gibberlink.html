@@ -767,7 +767,7 @@ async function decodeWav(input) {
 // ═══════════════════════════════════════════════════════════
 // GGWAVE — Live-Übertragung
 // ═══════════════════════════════════════════════════════════
-let _ggw=null, _ggw_inst=null, _ggw_recv_inst=null;
+let _ggw=null, _ggw_inst=null;
 let _receiving=false, _recv_proc=null, _recv_stream=null;
 
 function convertTypedArray(src, type){
@@ -788,8 +788,6 @@ async function initGGwave(){
     p.soundMarkerThreshold=4;
     _ggw_inst=_ggw.init(p);
     console.log('initGGwave: inst=',_ggw_inst,'sampleRate=',ctx.sampleRate);
-    console.log('ggwave keys:', Object.keys(_ggw).filter(k=>!k.startsWith('_')).join(', '));
-    console.log('TxProtocolId:', JSON.stringify(_ggw.TxProtocolId), 'ProtocolId:', JSON.stringify(_ggw.ProtocolId));
     document.getElementById('gg-status').textContent='✓ GGwave bereit.';
     return true;
   }catch(e){
@@ -806,32 +804,12 @@ async function doGGSend(){
   const ctx=getCtx();
   if(ctx.state==='suspended') await ctx.resume();
   try{
-    // Test 1: README-style offline decode (TxProtocolId, same instance, raw waveform)
-    {
-      const txProto=_ggw.TxProtocolId ? _ggw.TxProtocolId.GGWAVE_TX_PROTOCOL_AUDIBLE_FAST : _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST;
-      const tw=_ggw.encode(_ggw_inst, glText, txProto, 10);
-      const tr=_ggw.decode(_ggw_inst, tw);
-      console.log('README-self-test TxProto: waveLen=',tw?tw.byteLength:0,'decodeLen=',tr?tr.length:0, tr&&tr.length>0 ? '✓ '+new TextDecoder().decode(tr) : '✗');
-    }
     const protocolId=_ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST.value;
     const waveformRaw=_ggw.encode(_ggw_inst, glText, protocolId, 100);
     const waveform=waveformRaw.slice();
-    console.log('encode: byteLength=',waveform.byteLength,'protocol=',protocolId);
-    // Test 2: raw waveform decode (Int16 bytes, no conversion)
-    {const tr2=_ggw.decode(_ggw_inst, waveform); console.log('raw-waveform decode: len=',tr2?tr2.length:0, tr2&&tr2.length>0?'✓ '+new TextDecoder().decode(tr2):'✗');}
     const samples=new Float32Array(waveform.byteLength/2);
     {const v=new DataView(waveform.buffer); for(let i=0;i<samples.length;i++) samples[i]=v.getInt16(i*2,true)/32768.0;}
-    console.log('samples=',samples.length,'max=',Math.max(...samples.slice(0,256)).toFixed(4));
-    // Test 3: Float32 chunks (same as live decode path)
-    {
-      let ok=false;
-      const cs=1024;
-      for(let i=0;i<samples.length-cs;i+=cs){
-        const r=_ggw.decode(_ggw_inst,convertTypedArray(samples.slice(i,i+cs),Int8Array));
-        if(r&&r.length>0){console.log('Float32-chunk decode OK at chunk '+(i/cs)+':',new TextDecoder().decode(r));ok=true;break;}
-      }
-      if(!ok) console.warn('Float32-chunk decode ✗ (all chunks returned 0)');
-    }
+    console.log('encode ok: samples=',samples.length,'protocol=',protocolId);
     const audioBuf=ctx.createBuffer(1,samples.length,ctx.sampleRate);
     audioBuf.getChannelData(0).set(samples);
     const src=ctx.createBufferSource();
@@ -848,7 +826,6 @@ async function toggleReceive(){
     _receiving=false;
     if(_recv_proc){ _recv_proc.disconnect(); _recv_proc=null; }
     if(_recv_stream){ _recv_stream.getTracks().forEach(t=>t.stop()); _recv_stream=null; }
-    _ggw_recv_inst=null;
     btn.textContent='🎙 Empfangen';
     btn.className='btn-secondary';
     document.getElementById('gg-status').textContent='Empfang gestoppt.';
@@ -865,22 +842,20 @@ async function toggleReceive(){
   }
   const ctx=getCtx();
   if(ctx.state==='suspended') await ctx.resume();
-  // Dedizierte Empfangs-Instanz (unabhängig von Sende-Instanz)
-  const rp=_ggw.getDefaultParameters();
-  rp.sampleRateInp=ctx.sampleRate; rp.sampleRateOut=ctx.sampleRate; rp.soundMarkerThreshold=1;
-  _ggw_recv_inst=_ggw.init(rp);
-  console.log('toggleReceive: recv_inst=',_ggw_recv_inst,'sampleRate=',ctx.sampleRate,'threshold=1');
+  console.log('toggleReceive: inst=',_ggw_inst,'sampleRate=',ctx.sampleRate);
   const source=ctx.createMediaStreamSource(_recv_stream);
-  // 1024 Samples/Frame — exakt was GGwave erwartet (samplesPerFrame=1024)
   _recv_proc=ctx.createScriptProcessor(1024,1,1);
   let frameCount=0;
   _recv_proc.onaudioprocess=e=>{
     const f32=new Float32Array(e.inputBuffer.getChannelData(0));
     frameCount++;
-    const res=_ggw.decode(_ggw_recv_inst, convertTypedArray(f32, Int8Array));
+    // Float32→Int16 PCM: ggwave decode erwartet Int16, nicht Float32-Bytes
+    const int16=new Int16Array(f32.length);
+    for(let i=0;i<f32.length;i++) int16[i]=Math.round(f32[i]*32767);
+    const res=_ggw.decode(_ggw_inst, convertTypedArray(int16, Int8Array));
     if(frameCount%200===0){
       const rms=Math.sqrt(f32.reduce((s,x)=>s+x*x,0)/f32.length);
-      console.log('GGwave recv frame='+frameCount+' rms='+rms.toFixed(4)+' lastDecodeLen='+res.length);
+      console.log('GGwave recv frame='+frameCount+' rms='+rms.toFixed(4)+' decLen='+res.length);
     }
     if(res&&res.length>0){
       const gl=new TextDecoder().decode(res).trim();
