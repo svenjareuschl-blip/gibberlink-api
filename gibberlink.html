@@ -805,30 +805,43 @@ async function doGGSend(){
   const ctx=getCtx();
   if(ctx.state==='suspended') ctx.resume();
   try{
-    // Diagnose: ProtocolId-Werte loggen
+    // Diagnose: alle Default-Parameter und ProtocolId loggen
+    const dflt=_ggw.getDefaultParameters();
+    console.log('GGwave defaults:', JSON.stringify(dflt));
     console.log('GGwave ProtocolId:', JSON.stringify(_ggw.ProtocolId));
     const protId=_ggw.ProtocolId?.GGWAVE_PROTOCOL_AUDIBLE_FAST;
     console.log('AUDIBLE_FAST id=', protId, 'encode inst=', _ggw_inst);
     const waveform=_ggw.encode(_ggw_inst, glText, protId, 100);
-    console.log('waveform type=',waveform?.constructor?.name,'len=',waveform?.length,'first4=',waveform ? Array.from(waveform.slice(0,4)) : null);
+    console.log('waveform type=',waveform?.constructor?.name,'len=',waveform?.length);
     const samples=new Float32Array(waveform.length/2);
     const view=new DataView(waveform.buffer, waveform.byteOffset);
     for(let i=0;i<samples.length;i++) samples[i]=view.getInt16(i*2,true)/32768.0;
-    console.log('samples.length=',samples.length,'max=',Math.max(...samples.slice(0,256)));
-    // Selbsttest: encode→decode ohne Luft — prüft ob der Decoder funktioniert
+    console.log('samples.length=',samples.length,'max=',Math.max(...samples.slice(0,256)).toFixed(4));
+    // Selbsttest A: chunk-weise (1024)
     {
       const testP=_ggw.getDefaultParameters();
       testP.sampleRateInp=ctx.sampleRate; testP.sampleRateOut=ctx.sampleRate;
       testP.soundMarkerThreshold=1;
       const testInst=_ggw.init(testP);
-      console.log('self-test testInst=',testInst,'threshold=1 sampleRate=',ctx.sampleRate);
+      console.log('self-test A: testInst=',testInst);
       const cs=1024; let selfOk=false;
       for(let i=0;i<samples.length-cs;i+=cs){
         const r=_ggw.decode(testInst,convertTypedArray(samples.slice(i,i+cs),Int8Array));
-        if(i<5*cs) console.log('  chunk',i/cs,'→ r=',r,'len=',r?r.length:-1);
-        if(r&&r.length>0){ console.log('GGwave SELBSTTEST OK:',new TextDecoder().decode(r)); selfOk=true; break; }
+        if(i<5*cs) console.log('  A chunk',i/cs,'r=',r,'len=',r?r.length:-1);
+        if(r&&r.length>0){ console.log('SELBSTTEST A OK:',new TextDecoder().decode(r)); selfOk=true; break; }
       }
-      if(!selfOk) console.warn('GGwave SELBSTTEST FEHLER bei sampleRate='+ctx.sampleRate);
+      if(!selfOk) console.warn('SELBSTTEST A FEHLER');
+    }
+    // Selbsttest B: gesamten Buffer auf einmal
+    {
+      const testP2=_ggw.getDefaultParameters();
+      testP2.sampleRateInp=ctx.sampleRate; testP2.sampleRateOut=ctx.sampleRate;
+      testP2.soundMarkerThreshold=1;
+      const testInst2=_ggw.init(testP2);
+      const rBulk=_ggw.decode(testInst2,convertTypedArray(samples,Int8Array));
+      console.log('SELBSTTEST B (bulk): r=',rBulk,'len=',rBulk?rBulk.length:-1);
+      if(rBulk&&rBulk.length>0) console.log('SELBSTTEST B OK:',new TextDecoder().decode(rBulk));
+      else console.warn('SELBSTTEST B FEHLER');
     }
     const audioBuf=ctx.createBuffer(1,samples.length,ctx.sampleRate);
     audioBuf.getChannelData(0).set(samples);
