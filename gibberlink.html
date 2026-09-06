@@ -938,12 +938,9 @@ async function togglePhonReceive(){
     if(ph===null){
       _silFrames++;
       if(_silFrames>=2&&_phonWord){
-        // Einzelne Buchstaben am Ende (Nachhall-Rauschen) ignorieren
-        if(_phonWord.length>1||_phonText===''){
-          _phonText+=(_phonText?' ':'')+_phonWord;
-          updatePhonDisplay();
-        }
+        _phonText+=(_phonText?' ':'')+_phonWord;
         _phonWord='';_prevPhon=null;
+        updatePhonDisplay();
       }
     }else{
       _silFrames=0;
