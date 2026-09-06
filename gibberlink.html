@@ -358,7 +358,7 @@ const CONS_FREQ   = {b:659,d:698,f:784,g:880,k:988,l:1047,m:1109,n:1175,p:1245,r
 const DUR_V=0.13, DUR_C=0.065, DUR_GAP=0.10;
 // Live-Phonem: Vokale oberhalb aller Konsonanten (Handy-Lautsprecher, keine Oberton-Konflikte)
 const LIVE_VOWEL  = {a:2000,e:2150,i:2300,o:2450,u:2600};
-const DUR_V_L=0.22, DUR_C_L=0.18, DUR_GAP_L=0.40;
+const DUR_V_L=0.22, DUR_C_L=0.18, DUR_GAP_L=0.50;
 const LFO_RATE=5.5; // Hz — Vibrato-Geschwindigkeit
 
 let _ctx=null;
@@ -802,7 +802,7 @@ async function doGGSend(){
   const ctx=getCtx();
   if(ctx.state==='suspended') ctx.resume();
   try{
-    const waveform=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_NORMAL, 10);
+    const waveform=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_NORMAL, 50);
     const samples=new Float32Array(waveform.length/2);
     const view=new DataView(waveform.buffer, waveform.byteOffset);
     for(let i=0;i<samples.length;i++) samples[i]=view.getInt16(i*2,true)/32768.0;
@@ -937,7 +937,7 @@ async function togglePhonReceive(){
     const ph=detectBestPhoneme(samples,ctx.sampleRate);
     if(ph===null){
       _silFrames++;
-      if(_silFrames>=2&&_phonWord){
+      if(_silFrames>=3&&_phonWord){
         _phonText+=(_phonText?' ':'')+_phonWord;
         _phonWord='';_prevPhon=null;
         updatePhonDisplay();
