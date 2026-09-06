@@ -784,7 +784,7 @@ async function initGGwave(){
     const p=ggw.getDefaultParameters();
     p.sampleRateInp=ctx.sampleRate;
     p.sampleRateOut=ctx.sampleRate;
-    p.soundMarkerThreshold=4;
+    p.soundMarkerThreshold=1;
     _ggw=ggw;
     _ggw_inst=ggw.init(p);
     document.getElementById('gg-status').textContent='✓ GGwave bereit.';
@@ -802,7 +802,7 @@ async function doGGSend(){
   const ctx=getCtx();
   if(ctx.state==='suspended') ctx.resume();
   try{
-    const waveform=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST, 10);
+    const waveform=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST, 100);
     const samples=new Float32Array(waveform.length/2);
     const view=new DataView(waveform.buffer, waveform.byteOffset);
     for(let i=0;i<samples.length;i++) samples[i]=view.getInt16(i*2,true)/32768.0;
@@ -839,20 +839,22 @@ async function toggleReceive(){
   const ctx=getCtx();
   if(ctx.state==='suspended') ctx.resume();
   const source=ctx.createMediaStreamSource(_recv_stream);
-  _recv_proc=ctx.createScriptProcessor(4096,1,1);
+  _recv_proc=ctx.createScriptProcessor(1024,1,1);
   _recv_proc.onaudioprocess=e=>{
     const f32=new Float32Array(e.inputBuffer.getChannelData(0));
     const res=_ggw.decode(_ggw_inst, convertTypedArray(f32, Int8Array));
     if(res && res.length>0){
-      const gl=res.trim();
-      document.getElementById('gg-gl').textContent=gl;
-      document.getElementById('gg-de').textContent=reverseTranslate(gl);
-      document.getElementById('gg-recv-panel').style.display='block';
-      _lastRevGl=gl;
+      const gl=(res instanceof Int8Array ? new TextDecoder().decode(res) : String(res)).trim();
+      if(gl){ document.getElementById('gg-gl').textContent=gl;
+        document.getElementById('gg-de').textContent=reverseTranslate(gl);
+        document.getElementById('gg-recv-panel').style.display='block';
+        _lastRevGl=gl; }
     }
   };
+  const _recvSilence=ctx.createGain(); _recvSilence.gain.value=0;
   source.connect(_recv_proc);
-  _recv_proc.connect(ctx.destination);
+  _recv_proc.connect(_recvSilence);
+  _recvSilence.connect(ctx.destination);
   _receiving=true;
   btn.textContent='⏹ Stop'; btn.className='btn-primary';
   document.getElementById('gg-status').textContent='🎙 Höre zu…';
