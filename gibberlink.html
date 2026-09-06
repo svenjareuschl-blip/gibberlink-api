@@ -356,6 +356,9 @@ function reverseTranslate(glText) {
 const VOWEL_FREQ  = {a:330,e:392,i:440,o:494,u:523};
 const CONS_FREQ   = {b:659,d:698,f:784,g:880,k:988,l:1047,m:1109,n:1175,p:1245,r:1319,s:1397,t:1480,v:1568,z:1661,x:1760};
 const DUR_V=0.13, DUR_C=0.065, DUR_GAP=0.10;
+// Live-Phonem: Vokale oberhalb aller Konsonanten (Handy-Lautsprecher, keine Oberton-Konflikte)
+const LIVE_VOWEL  = {a:2000,e:2150,i:2300,o:2450,u:2600};
+const DUR_V_L=0.15, DUR_C_L=0.10, DUR_GAP_L=0.30;
 const LFO_RATE=5.5; // Hz — Vibrato-Geschwindigkeit
 
 let _ctx=null;
@@ -452,6 +455,36 @@ async function playGl(glText){
 
     osc1.start(t); osc1.stop(t+dur);
     osc2.start(t); osc2.stop(t+dur);
+    t+=dur;
+  });
+}
+
+// Live-Phonem Senden: klare Sinustöne, Vokale im 2000-2600 Hz Bereich
+async function playLiveGl(glText){
+  const ctx=getCtx();
+  if(ctx.state!=='running') await ctx.resume();
+  const words=glText.replace(/[[\].,!?;:]/g,'').split(/\s+/);
+  const seq=[];
+  words.forEach((w,wi)=>{
+    [...w].forEach(ch=>{
+      const freq=LIVE_VOWEL[ch]||CONS_FREQ[ch];
+      if(!freq) return;
+      const isVow=!!LIVE_VOWEL[ch];
+      seq.push({freq, dur:isVow?DUR_V_L:DUR_C_L});
+    });
+    if(wi<words.length-1) seq.push({freq:null, dur:DUR_GAP_L});
+  });
+  let t=ctx.currentTime+0.05;
+  seq.forEach(({freq,dur})=>{
+    if(!freq){ t+=dur; return; }
+    const osc=ctx.createOscillator(), g=ctx.createGain();
+    osc.type='sine'; osc.frequency.value=freq;
+    g.gain.setValueAtTime(0,t);
+    g.gain.linearRampToValueAtTime(0.4,t+0.008);
+    g.gain.setValueAtTime(0.4,t+dur-0.008);
+    g.gain.linearRampToValueAtTime(0,t+dur);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(t); osc.stop(t+dur+0.01);
     t+=dur;
   });
 }
@@ -853,7 +886,8 @@ function goertzelMag(samples, freq, sr){
 function detectBestPhoneme(samples, sr){
   const rms=Math.sqrt(samples.reduce((s,x)=>s+x*x,0)/samples.length);
   if(rms<0.015) return null;
-  const all={...VOWEL_FREQ,...CONS_FREQ};
+  // Verwende LIVE_VOWEL (2000-2600 Hz) statt VOWEL_FREQ um Oberton-Konflikte zu vermeiden
+  const all={...LIVE_VOWEL,...CONS_FREQ};
   let maxM=0, best=null;
   for(const [ch,freq] of Object.entries(all)){
     const m=goertzelMag(samples,freq,sr);
@@ -867,10 +901,13 @@ let _prevPhon=null,_phonWord='',_phonText='',_silFrames=0;
 
 function doPhonSend(){
   if(!_lastGl){document.getElementById('phon-status').textContent='⚠ Erst übersetzen!';return;}
-  playGl(_lastGl);
+  playLiveGl(_lastGl);
   document.getElementById('phon-status').textContent='🔊 Sende…';
+  // DUR_C_L=100ms, DUR_V_L=150ms → Durchschnitt ~125ms pro Phonem + Wortabstände
+  const nPhon=_lastGl.replace(/[[\] .,!?;:]/g,'').replace(/\s+/g,'').length;
+  const nWords=_lastGl.replace(/[[\].,!?;:]/g,'').trim().split(/\s+/).length;
   setTimeout(()=>document.getElementById('phon-status').textContent='✓ Gesendet.',
-    (_lastGl.replace(/[[\] .,!?;:]/g,'').length*120+500));
+    nPhon*125 + nWords*300 + 500);
 }
 
 async function togglePhonReceive(){
@@ -893,14 +930,14 @@ async function togglePhonReceive(){
   const ctx=getCtx();
   if(ctx.state!=='running') await ctx.resume();
   const source=ctx.createMediaStreamSource(_phonStream);
-  _phonProc=ctx.createScriptProcessor(2048,1,1);
+  _phonProc=ctx.createScriptProcessor(4096,1,1);
   _prevPhon=null;_phonWord='';_phonText='';_silFrames=0;
   _phonProc.onaudioprocess=e=>{
     const samples=Array.from(e.inputBuffer.getChannelData(0));
     const ph=detectBestPhoneme(samples,ctx.sampleRate);
     if(ph===null){
       _silFrames++;
-      if(_silFrames>=3&&_phonWord){
+      if(_silFrames>=2&&_phonWord){
         _phonText+=(_phonText?' ':'')+_phonWord;
         _phonWord='';_prevPhon=null;
         updatePhonDisplay();
