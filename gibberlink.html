@@ -466,14 +466,17 @@ async function playLiveGl(glText){
   const words=glText.replace(/[[\].,!?;:]/g,'').split(/\s+/);
   const seq=[];
   words.forEach((w,wi)=>{
+    // Kurze Stille vor jedem Wort damit der Empfänger den Wortanfang nicht verpasst
+    if(wi>0) seq.push({freq:null, dur:DUR_GAP_L});
     [...w].forEach(ch=>{
       const freq=LIVE_VOWEL[ch]||CONS_FREQ[ch];
       if(!freq) return;
       const isVow=!!LIVE_VOWEL[ch];
       seq.push({freq, dur:isVow?DUR_V_L:DUR_C_L});
     });
-    if(wi<words.length-1) seq.push({freq:null, dur:DUR_GAP_L});
   });
+  // Abschlussstille damit letztes Wort committed wird
+  seq.push({freq:null, dur:DUR_GAP_L});
   let t=ctx.currentTime+0.05;
   seq.forEach(({freq,dur})=>{
     if(!freq){ t+=dur; return; }
@@ -802,7 +805,7 @@ async function doGGSend(){
   const ctx=getCtx();
   if(ctx.state==='suspended') ctx.resume();
   try{
-    const waveform=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_NORMAL, 50);
+    const waveform=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST, 50);
     const samples=new Float32Array(waveform.length/2);
     const view=new DataView(waveform.buffer, waveform.byteOffset);
     for(let i=0;i<samples.length;i++) samples[i]=view.getInt16(i*2,true)/32768.0;
