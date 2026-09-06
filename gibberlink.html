@@ -806,39 +806,26 @@ async function doGGSend(){
   const ctx=getCtx();
   if(ctx.state==='suspended') ctx.resume();
   try{
-    // Waveform encodieren (Protokoll als Integer 1 = AUDIBLE_FAST)
-    const waveform=_ggw.encode(_ggw_inst, glText, 1, 100);
-    console.log('waveform len=',waveform?.length,'byteLength=',waveform?.byteLength);
-    // Interpretation A: waveform als Float32 (offizielles Beispiel)
-    const samplesF32=new Float32Array(waveform.buffer, waveform.byteOffset, waveform.byteLength/4);
-    // Interpretation B: waveform als Int16 (unser bisheriger Ansatz)
-    const samplesI16=new Float32Array(waveform.byteLength/2);
-    {const v=new DataView(waveform.buffer,waveform.byteOffset); for(let i=0;i<samplesI16.length;i++) samplesI16[i]=v.getInt16(i*2,true)/32768.0;}
-    console.log('F32 interp: samples='+samplesF32.length+' max='+Math.max(...samplesF32.slice(0,256)).toFixed(4));
-    console.log('I16 interp: samples='+samplesI16.length+' max='+Math.max(...samplesI16.slice(0,256)).toFixed(4));
-    // Selbsttest mit Float32-Interpretation
+    // Waveform encodieren — sofort in JS-Heap kopieren (verhindert WASM-Memory-Invalidierung)
+    const waveformRaw=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST, 100);
+    const waveform=waveformRaw.slice(); // JS-Heap-Kopie, unabhängig von WASM-Heap
+    console.log('waveform byteLength=',waveform.byteLength);
+    // Int16→Float32 Konvertierung (korrekt, max≈0.98 bestätigt)
+    const samples=new Float32Array(waveform.byteLength/2);
+    {const v=new DataView(waveform.buffer); for(let i=0;i<samples.length;i++) samples[i]=v.getInt16(i*2,true)/32768.0;}
+    console.log('samples=',samples.length,'max=',Math.max(...samples.slice(0,256)).toFixed(4));
+    // Selbsttest: encode→decode ohne Luft
     {
       const tp=_ggw.getDefaultParameters(); tp.sampleRateInp=ctx.sampleRate; tp.sampleRateOut=ctx.sampleRate; tp.soundMarkerThreshold=1;
-      const ti=_ggw.init(tp); const cs=1024; let ok=false;
-      for(let i=0;i<samplesF32.length-cs;i+=cs){
-        const r=_ggw.decode(ti,convertTypedArray(samplesF32.slice(i,i+cs),Int8Array));
-        if(i<3*cs) console.log('F32 chunk',i/cs,'len=',r?r.length:-1);
-        if(r&&r.length>0){console.log('SELBSTTEST F32 OK:',new TextDecoder().decode(r));ok=true;break;}
+      const ti=_ggw.init(tp);
+      console.log('samplesPerFrame from defaults:', tp.samplesPerFrame);
+      const cs=1024; let ok=false;
+      for(let i=0;i<samples.length-cs;i+=cs){
+        const r=_ggw.decode(ti,convertTypedArray(samples.slice(i,i+cs),Int8Array));
+        if(r&&r.length>0){console.log('SELBSTTEST OK:',new TextDecoder().decode(r));ok=true;break;}
       }
-      if(!ok) console.warn('SELBSTTEST F32 FEHLER');
+      if(!ok) console.warn('SELBSTTEST FEHLER');
     }
-    // Selbsttest mit Int16-Interpretation
-    {
-      const tp=_ggw.getDefaultParameters(); tp.sampleRateInp=ctx.sampleRate; tp.sampleRateOut=ctx.sampleRate; tp.soundMarkerThreshold=1;
-      const ti=_ggw.init(tp); const cs=1024; let ok=false;
-      for(let i=0;i<samplesI16.length-cs;i+=cs){
-        const r=_ggw.decode(ti,convertTypedArray(samplesI16.slice(i,i+cs),Int8Array));
-        if(r&&r.length>0){console.log('SELBSTTEST I16 OK:',new TextDecoder().decode(r));ok=true;break;}
-      }
-      if(!ok) console.warn('SELBSTTEST I16 FEHLER');
-    }
-    // Audio abspielen (Float32-Interpretation — offizielles GGwave-Format)
-    const samples=samplesF32;
     const audioBuf=ctx.createBuffer(1,samples.length,ctx.sampleRate);
     audioBuf.getChannelData(0).set(samples);
     const src=ctx.createBufferSource();
