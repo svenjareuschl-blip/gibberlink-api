@@ -932,10 +932,13 @@ async function togglePhonReceive(){
   const source=ctx.createMediaStreamSource(_phonStream);
   _phonProc=ctx.createScriptProcessor(4096,1,1);
   _prevPhon=null;_phonWord='';_phonText='';_silFrames=0;
+  // Mehrheitsvotum: Phonem nur übernehmen wenn 2 aufeinanderfolgende Frames übereinstimmen
+  let _votePhon=null,_voteCount=0;
   _phonProc.onaudioprocess=e=>{
     const samples=Array.from(e.inputBuffer.getChannelData(0));
     const ph=detectBestPhoneme(samples,ctx.sampleRate);
     if(ph===null){
+      _votePhon=null;_voteCount=0;
       _silFrames++;
       if(_silFrames>=2&&_phonWord){
         _phonText+=(_phonText?' ':'')+_phonWord;
@@ -944,8 +947,16 @@ async function togglePhonReceive(){
       }
     }else{
       _silFrames=0;
-      if(ph!==_prevPhon){_phonWord+=ph;_prevPhon=ph;
-        document.getElementById('phon-status').textContent='🎙 …'+_phonWord;}
+      if(ph===_votePhon){
+        _voteCount++;
+        // Erst nach 2 übereinstimmenden Frames akzeptieren
+        if(_voteCount===2&&ph!==_prevPhon){
+          _phonWord+=ph;_prevPhon=ph;
+          document.getElementById('phon-status').textContent='🎙 …'+_phonWord;
+        }
+      }else{
+        _votePhon=ph;_voteCount=1;
+      }
     }
   };
   source.connect(_phonProc);
