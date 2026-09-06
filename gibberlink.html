@@ -466,17 +466,14 @@ async function playLiveGl(glText){
   const words=glText.replace(/[[\].,!?;:]/g,'').split(/\s+/);
   const seq=[];
   words.forEach((w,wi)=>{
-    // Kurze Stille vor jedem Wort damit der Empfänger den Wortanfang nicht verpasst
-    if(wi>0) seq.push({freq:null, dur:DUR_GAP_L});
     [...w].forEach(ch=>{
       const freq=LIVE_VOWEL[ch]||CONS_FREQ[ch];
       if(!freq) return;
       const isVow=!!LIVE_VOWEL[ch];
       seq.push({freq, dur:isVow?DUR_V_L:DUR_C_L});
     });
+    if(wi<words.length-1) seq.push({freq:null, dur:DUR_GAP_L});
   });
-  // Abschlussstille damit letztes Wort committed wird
-  seq.push({freq:null, dur:DUR_GAP_L});
   let t=ctx.currentTime+0.05;
   seq.forEach(({freq,dur})=>{
     if(!freq){ t+=dur; return; }
@@ -787,7 +784,7 @@ async function initGGwave(){
     const p=ggw.getDefaultParameters();
     p.sampleRateInp=ctx.sampleRate;
     p.sampleRateOut=ctx.sampleRate;
-    p.soundMarkerThreshold=1;
+    p.soundMarkerThreshold=4;
     _ggw=ggw;
     _ggw_inst=ggw.init(p);
     document.getElementById('gg-status').textContent='✓ GGwave bereit.';
@@ -805,7 +802,7 @@ async function doGGSend(){
   const ctx=getCtx();
   if(ctx.state==='suspended') ctx.resume();
   try{
-    const waveform=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST, 100);
+    const waveform=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST, 10);
     const samples=new Float32Array(waveform.length/2);
     const view=new DataView(waveform.buffer, waveform.byteOffset);
     for(let i=0;i<samples.length;i++) samples[i]=view.getInt16(i*2,true)/32768.0;
@@ -842,22 +839,20 @@ async function toggleReceive(){
   const ctx=getCtx();
   if(ctx.state==='suspended') ctx.resume();
   const source=ctx.createMediaStreamSource(_recv_stream);
-  _recv_proc=ctx.createScriptProcessor(1024,1,1);
+  _recv_proc=ctx.createScriptProcessor(4096,1,1);
   _recv_proc.onaudioprocess=e=>{
     const f32=new Float32Array(e.inputBuffer.getChannelData(0));
     const res=_ggw.decode(_ggw_inst, convertTypedArray(f32, Int8Array));
     if(res && res.length>0){
-      const gl=(res instanceof Int8Array ? new TextDecoder().decode(res) : String(res)).trim();
+      const gl=res.trim();
       document.getElementById('gg-gl').textContent=gl;
       document.getElementById('gg-de').textContent=reverseTranslate(gl);
       document.getElementById('gg-recv-panel').style.display='block';
       _lastRevGl=gl;
     }
   };
-  const _recvSilence=ctx.createGain(); _recvSilence.gain.value=0;
   source.connect(_recv_proc);
-  _recv_proc.connect(_recvSilence);
-  _recvSilence.connect(ctx.destination);
+  _recv_proc.connect(ctx.destination);
   _receiving=true;
   btn.textContent='⏹ Stop'; btn.className='btn-primary';
   document.getElementById('gg-status').textContent='🎙 Höre zu…';
@@ -953,10 +948,8 @@ async function togglePhonReceive(){
         document.getElementById('phon-status').textContent='🎙 …'+_phonWord;}
     }
   };
-  const _phonSilence=ctx.createGain(); _phonSilence.gain.value=0;
   source.connect(_phonProc);
-  _phonProc.connect(_phonSilence);
-  _phonSilence.connect(ctx.destination);
+  _phonProc.connect(ctx.destination);
   _phonRecv=true;
   btn.textContent='⏹ Stop';btn.className='btn-primary';
   document.getElementById('phon-status').textContent='🎙 Höre zu…';
