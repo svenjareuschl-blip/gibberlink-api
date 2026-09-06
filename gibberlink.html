@@ -805,22 +805,30 @@ async function doGGSend(){
   const ctx=getCtx();
   if(ctx.state==='suspended') ctx.resume();
   try{
-    const waveform=_ggw.encode(_ggw_inst, glText, _ggw.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST, 100);
+    // Diagnose: ProtocolId-Werte loggen
+    console.log('GGwave ProtocolId:', JSON.stringify(_ggw.ProtocolId));
+    const protId=_ggw.ProtocolId?.GGWAVE_PROTOCOL_AUDIBLE_FAST;
+    console.log('AUDIBLE_FAST id=', protId, 'encode inst=', _ggw_inst);
+    const waveform=_ggw.encode(_ggw_inst, glText, protId, 100);
+    console.log('waveform type=',waveform?.constructor?.name,'len=',waveform?.length,'first4=',waveform ? Array.from(waveform.slice(0,4)) : null);
     const samples=new Float32Array(waveform.length/2);
     const view=new DataView(waveform.buffer, waveform.byteOffset);
     for(let i=0;i<samples.length;i++) samples[i]=view.getInt16(i*2,true)/32768.0;
+    console.log('samples.length=',samples.length,'max=',Math.max(...samples.slice(0,256)));
     // Selbsttest: encode→decode ohne Luft — prüft ob der Decoder funktioniert
     {
       const testP=_ggw.getDefaultParameters();
       testP.sampleRateInp=ctx.sampleRate; testP.sampleRateOut=ctx.sampleRate;
-      testP.soundMarkerThreshold=4;
+      testP.soundMarkerThreshold=1;
       const testInst=_ggw.init(testP);
+      console.log('self-test testInst=',testInst,'threshold=1 sampleRate=',ctx.sampleRate);
       const cs=1024; let selfOk=false;
       for(let i=0;i<samples.length-cs;i+=cs){
         const r=_ggw.decode(testInst,convertTypedArray(samples.slice(i,i+cs),Int8Array));
+        if(i<5*cs) console.log('  chunk',i/cs,'→ r=',r,'len=',r?r.length:-1);
         if(r&&r.length>0){ console.log('GGwave SELBSTTEST OK:',new TextDecoder().decode(r)); selfOk=true; break; }
       }
-      if(!selfOk) console.warn('GGwave SELBSTTEST FEHLER — Decoder funktioniert nicht bei sampleRate='+ctx.sampleRate);
+      if(!selfOk) console.warn('GGwave SELBSTTEST FEHLER bei sampleRate='+ctx.sampleRate);
     }
     const audioBuf=ctx.createBuffer(1,samples.length,ctx.sampleRate);
     audioBuf.getChannelData(0).set(samples);
