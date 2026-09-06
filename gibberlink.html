@@ -846,9 +846,9 @@ async function toggleReceive(){
   if(ctx.state==='suspended') await ctx.resume();
   // Dedizierte Empfangs-Instanz (unabhängig von Sende-Instanz)
   const rp=_ggw.getDefaultParameters();
-  rp.sampleRateInp=ctx.sampleRate; rp.sampleRateOut=ctx.sampleRate; rp.soundMarkerThreshold=4;
+  rp.sampleRateInp=ctx.sampleRate; rp.sampleRateOut=ctx.sampleRate; rp.soundMarkerThreshold=1;
   _ggw_recv_inst=_ggw.init(rp);
-  console.log('toggleReceive: recv_inst=',_ggw_recv_inst,'sampleRate=',ctx.sampleRate);
+  console.log('toggleReceive: recv_inst=',_ggw_recv_inst,'sampleRate=',ctx.sampleRate,'threshold=1');
   const source=ctx.createMediaStreamSource(_recv_stream);
   // 1024 Samples/Frame — exakt was GGwave erwartet (samplesPerFrame=1024)
   _recv_proc=ctx.createScriptProcessor(1024,1,1);
@@ -856,11 +856,11 @@ async function toggleReceive(){
   _recv_proc.onaudioprocess=e=>{
     const f32=new Float32Array(e.inputBuffer.getChannelData(0));
     frameCount++;
+    const res=_ggw.decode(_ggw_recv_inst, convertTypedArray(f32, Int8Array));
     if(frameCount%200===0){
       const rms=Math.sqrt(f32.reduce((s,x)=>s+x*x,0)/f32.length);
-      console.log('GGwave recv frame='+frameCount+' rms='+rms.toFixed(4));
+      console.log('GGwave recv frame='+frameCount+' rms='+rms.toFixed(4)+' lastDecodeLen='+res.length);
     }
-    const res=_ggw.decode(_ggw_recv_inst, convertTypedArray(f32, Int8Array));
     if(res&&res.length>0){
       const gl=new TextDecoder().decode(res).trim();
       if(gl){
