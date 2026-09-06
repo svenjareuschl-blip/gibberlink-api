@@ -81,15 +81,22 @@ input[type=range]{width:100%;accent-color:#58a6ff;cursor:pointer;height:4px}
   .page-header{grid-column:1/-1}
   .page-footer{grid-column:1/-1}
   .card{max-width:none}
+  /* 5. Karte füllt beide Spalten */
+  .card-full{grid-column:1/-1}
 }
 
-/* ── iPad landscape: 4 Spalten ──────────────────────── */
+/* ── iPad landscape: 3 Spalten (intern 6er-Raster) ─── */
 @media(min-width:1024px){
   .page-wrap{
-    grid-template-columns:repeat(4,1fr);
+    grid-template-columns:repeat(6,1fr);
     max-width:1440px;
     padding:1.5rem 2rem;
   }
+  /* Karten 1–3: je 1/3 Breite */
+  .card{grid-column:span 2}
+  /* Karten 4–5: je 1/2 Breite (gleichmäßig auf 3 Spalten) */
+  .card-full,.card-lg{grid-column:span 3}
+  .page-header,.page-footer{grid-column:1/-1}
 }
 </style>
 </head>
@@ -153,7 +160,7 @@ input[type=range]{width:100%;accent-color:#58a6ff;cursor:pointer;height:4px}
   </div>
 
   <!-- Gibberlink Live -->
-  <div class="card">
+  <div class="card card-lg">
     <h2>🔊 Gibberlink Live — Senden &amp; Empfangen</h2>
     <p style="font-size:.8rem;color:#8b949e;margin-bottom:.9rem;line-height:1.6">Spiele den GL-Klang über den Lautsprecher — ein anderes Gerät in der Nähe erkennt die Töne und übersetzt zurück. <span style="color:#484f58">Ruhige Umgebung empfohlen. HTTPS für Empfangen nötig.</span></p>
     <div class="btn-row">
@@ -170,7 +177,7 @@ input[type=range]{width:100%;accent-color:#58a6ff;cursor:pointer;height:4px}
   </div>
 
   <!-- GGwave -->
-  <div class="card">
+  <div class="card card-full">
     <h2>📡 GGwave Live-Übertragung</h2>
     <p style="font-size:.8rem;color:#8b949e;margin-bottom:.9rem;line-height:1.6">Sende den GL-Text als robustes Audio-Signal (Lautsprecher) oder empfange ihn live per Mikrofon — auch Gerät↔Gerät möglich. <span style="color:#484f58">Empfangen benötigt HTTPS.</span></p>
     <div class="btn-row">
