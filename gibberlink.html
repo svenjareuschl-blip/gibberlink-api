@@ -768,6 +768,7 @@ async function decodeWav(input) {
 // ═══════════════════════════════════════════════════════════
 let _ggw=null, _ggw_inst=null;
 let _receiving=false, _recv_proc=null, _recv_stream=null;
+let _recordedSamples=[];
 
 function convertTypedArray(src, type){
   const buf=new ArrayBuffer(src.byteLength);
@@ -818,6 +819,38 @@ async function doGGSend(){
   }catch(e){ document.getElementById('gg-status').textContent='✗ '+e.message; }
 }
 
+function decodeRecordedBuffer(){
+  document.getElementById('gg-status').textContent='Analysiere Aufnahme…';
+  if(_recordedSamples.length===0){
+    document.getElementById('gg-status').textContent='Keine Aufnahme vorhanden.';
+    return;
+  }
+  const total=_recordedSamples.reduce((s,c)=>s+c.length,0);
+  console.log('decodeRecordedBuffer: samples='+total+' ('+((total/48000).toFixed(1))+'s)');
+  const all=new Float32Array(total);
+  let off=0; for(const c of _recordedSamples){all.set(c,off);off+=c.length;}
+  const chunkSize=1024;
+  let found=null;
+  for(let i=0;i<all.length-chunkSize;i+=chunkSize){
+    const res=_ggw.decode(_ggw_inst,convertTypedArray(all.slice(i,i+chunkSize),Int8Array));
+    if(res&&res.length>0){
+      found=new TextDecoder().decode(res).trim();
+      console.log('decodeRecordedBuffer: found at chunk '+(i/chunkSize), found);
+      if(found) break;
+    }
+  }
+  if(found){
+    document.getElementById('gg-gl').textContent=found;
+    document.getElementById('gg-de').textContent=reverseTranslate(found);
+    document.getElementById('gg-recv-panel').style.display='block';
+    _lastRevGl=found;
+    document.getElementById('gg-status').textContent='✓ Empfangen: "'+found+'"';
+  }else{
+    document.getElementById('gg-status').textContent='Nichts erkannt — Handy näher halten und lauter stellen?';
+    console.log('decodeRecordedBuffer: nothing found');
+  }
+}
+
 async function toggleReceive(){
   console.log('toggleReceive: _receiving=', _receiving, '_ggw=', !!_ggw, '_ggw_inst=', !!_ggw_inst);
   const btn=document.getElementById('btn-recv');
@@ -827,10 +860,9 @@ async function toggleReceive(){
     if(_recv_stream){ _recv_stream.getTracks().forEach(t=>t.stop()); _recv_stream=null; }
     btn.textContent='🎙 Empfangen';
     btn.className='btn-secondary';
-    document.getElementById('gg-status').textContent='Empfang gestoppt.';
+    decodeRecordedBuffer();
     return;
   }
-  // Frische Decode-Instanz (Factory nur einmal laden)
   _ggw_inst=null;
   console.log('toggleReceive: calling initGGwave...');
   if(!await initGGwave()){ console.log('toggleReceive: initGGwave FAILED'); return; }
@@ -846,26 +878,27 @@ async function toggleReceive(){
   const ctx=getCtx();
   if(ctx.state==='suspended') ctx.resume();
   const source=ctx.createMediaStreamSource(_recv_stream);
-  _recv_proc=ctx.createScriptProcessor(1024,1,1);
+  _recv_proc=ctx.createScriptProcessor(4096,1,1);
+  _recordedSamples=[];
+  let _dbgFrames=0;
   _recv_proc.onaudioprocess=e=>{
     const f32=new Float32Array(e.inputBuffer.getChannelData(0));
-    const res=_ggw.decode(_ggw_inst, convertTypedArray(f32, Int8Array));
-    if(res && res.length>0) console.log('GGwave res len='+res.length, res instanceof Int8Array ? new TextDecoder().decode(res) : res);
-    if(res && res.length>0){
-      const gl=(res instanceof Int8Array ? new TextDecoder().decode(res) : String(res)).trim();
-      if(gl){ document.getElementById('gg-gl').textContent=gl;
-        document.getElementById('gg-de').textContent=reverseTranslate(gl);
-        document.getElementById('gg-recv-panel').style.display='block';
-        _lastRevGl=gl; }
+    _recordedSamples.push(new Float32Array(f32));
+    _dbgFrames++;
+    if(_dbgFrames%25===0){
+      const rms=Math.sqrt(f32.reduce((s,x)=>s+x*x,0)/f32.length);
+      console.log('GGwave rms='+rms.toFixed(4)+' frames='+_dbgFrames);
     }
+    const total=_recordedSamples.reduce((s,c)=>s+c.length,0);
+    document.getElementById('gg-status').textContent='🔴 Aufnehmen: '+((total/ctx.sampleRate).toFixed(1))+'s — dann Stop';
   };
-  const _recvSilence=ctx.createGain(); _recvSilence.gain.value=0;
+  const recvSilence=ctx.createGain(); recvSilence.gain.value=0;
   source.connect(_recv_proc);
-  _recv_proc.connect(_recvSilence);
-  _recvSilence.connect(ctx.destination);
+  _recv_proc.connect(recvSilence);
+  recvSilence.connect(ctx.destination);
   _receiving=true;
   btn.textContent='⏹ Stop'; btn.className='btn-primary';
-  document.getElementById('gg-status').textContent='🎙 Höre zu…';
+  document.getElementById('gg-status').textContent='🔴 Aufnehmen… dann Stop klicken';
   document.getElementById('gg-recv-panel').style.display='block';
 }
 
