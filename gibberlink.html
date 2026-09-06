@@ -581,10 +581,14 @@ function doDownload(){
   if(!_lastGl) return;
   const buf=buildWav(_lastGl);
   const blob=new Blob([buf],{type:'audio/wav'});
+  const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
+  a.href=url;
   a.download='gibberlink.wav';
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 function doClear(){
@@ -785,7 +789,7 @@ async function initGGwave(){
     const p=_ggw.getDefaultParameters();
     p.sampleRateInp=ctx.sampleRate;
     p.sampleRateOut=ctx.sampleRate;
-    p.soundMarkerThreshold=4;
+    p.soundMarkerThreshold=0;
     _ggw_inst=_ggw.init(p);
     console.log('initGGwave: inst=',_ggw_inst,'sampleRate=',ctx.sampleRate);
     document.getElementById('gg-status').textContent='✓ GGwave bereit.';
