@@ -21,13 +21,27 @@ var Module = {
 </script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
-body{display:flex;flex-direction:column;align-items:center;padding:2rem 1rem;gap:1.5rem;min-height:100vh}
+html,body{height:100%}
+body{min-height:100vh;background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;flex-direction:column}
 h1{font-size:1.6rem;font-weight:800;letter-spacing:.04em}
 h1 span{color:#58a6ff}
-.sub{font-size:.8rem;color:#8b949e;text-align:center;max-width:480px;line-height:1.6}
+.sub{font-size:.8rem;color:#8b949e;text-align:center;max-width:480px;line-height:1.6;margin:0 auto}
+
+/* Tab Navigation */
+.tab-nav{position:sticky;top:0;z-index:100;background:#0d1117;border-bottom:1px solid #21262d;display:flex;gap:.4rem;padding:.55rem 1rem}
+.tab{background:transparent;color:#8b949e;border:none;border-radius:6px;padding:.38rem .9rem;font-size:.85rem;cursor:pointer;font-weight:600;transition:background .15s,color .15s}
+.tab:hover{background:#161b22;color:#e6edf3}
+.tab.tab-active{background:#21262d;color:#e6edf3}
+
+/* Page wrapper — mobile: single column */
+.page-wrap{display:flex;flex-direction:column;align-items:center;padding:1.5rem 1rem;gap:1.5rem;width:100%;flex:1}
+.page-header{text-align:center;width:100%;display:flex;flex-direction:column;align-items:center;gap:.5rem}
+.page-footer{font-size:.7rem;color:#30363d;text-align:center;width:100%}
+
+/* Cards */
 .card{background:#161b22;border:1px solid #21262d;border-radius:12px;padding:1.4rem;width:100%;max-width:600px}
 .card h2{font-size:.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8b949e;margin-bottom:.9rem}
+
 textarea{width:100%;background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:7px;
   padding:.6rem .8rem;font-size:.95rem;resize:vertical;min-height:90px;font-family:inherit;
   line-height:1.5;transition:border-color .15s}
@@ -38,152 +52,192 @@ textarea:focus{outline:none;border-color:#58a6ff}
 .result.reverse{color:#e6edf3;font-size:.95rem;letter-spacing:.02em;font-weight:400}
 .unknown{color:#d29922;font-style:italic}
 .btn-row{display:flex;gap:.6rem;margin-top:.8rem;flex-wrap:wrap}
-button{border:none;border-radius:7px;padding:.45rem 1rem;font-size:.88rem;cursor:pointer;
-  font-weight:600;transition:opacity .15s}
+button{border:none;border-radius:7px;padding:.45rem 1rem;font-size:.88rem;cursor:pointer;font-weight:600;transition:opacity .15s}
 button:hover{opacity:.85}
 .btn-primary{background:#1f6feb;color:#fff}
 .btn-secondary{background:#21262d;color:#e6edf3;border:1px solid #30363d}
 .btn-play{background:#238636;color:#fff}
 .btn-dl{background:#21262d;color:#8b949e;border:1px solid #30363d;font-size:.8rem}
 .info{font-size:.72rem;color:#484f58;margin-top:.5rem;line-height:1.5}
-.badge{display:inline-block;background:#161b22;border:1px solid #30363d;border-radius:4px;
-  font-size:.65rem;padding:.1rem .35rem;color:#8b949e;margin-right:.25rem;font-family:monospace}
-.divider{width:100%;max-width:600px;border:none;border-top:1px solid #21262d}
+.badge{display:inline-block;background:#161b22;border:1px solid #30363d;border-radius:4px;font-size:.65rem;padding:.1rem .35rem;color:#8b949e;margin-right:.25rem;font-family:monospace}
 footer{font-size:.7rem;color:#30363d;text-align:center}
 .slider-row{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
 .slider-item label{font-size:.72rem;color:#8b949e;display:flex;justify-content:space-between;margin-bottom:.3rem}
 .slider-item label span{color:#58a6ff;font-weight:700;font-family:monospace}
 input[type=range]{width:100%;accent-color:#58a6ff;cursor:pointer;height:4px}
+
+/* ── iPad portrait: 2 Spalten ────────────────────────── */
+@media(min-width:700px){
+  .page-wrap{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    align-items:start;
+    column-gap:1.5rem;row-gap:1.5rem;
+    padding:1.5rem;
+    max-width:1000px;
+    margin:0 auto;
+    flex:none;width:100%;
+  }
+  .page-header{grid-column:1/-1}
+  .page-footer{grid-column:1/-1}
+  .card{max-width:none}
+}
+
+/* ── iPad landscape: 4 Spalten ──────────────────────── */
+@media(min-width:1024px){
+  .page-wrap{
+    grid-template-columns:repeat(4,1fr);
+    max-width:1440px;
+    padding:1.5rem 2rem;
+  }
+}
 </style>
 </head>
 <body>
 
-<h1>⚙ <span>Gibberlink</span></h1>
-<p class="sub">Eine erfundene Sprache — Deutsch &amp; Englisch als Eingangssprachen, SOV-Satzstellung, eigene Phonotaktik. Portable — kein Server nötig.</p>
+<!-- Tab-Navigation -->
+<nav class="tab-nav">
+  <button id="tab-main"     class="tab tab-active" onclick="showPage('main')">🔤 Übersetzer</button>
+  <button id="tab-settings" class="tab"            onclick="showPage('settings')">⚙ Einstellungen</button>
+</nav>
 
-<!-- Klangeinstellungen -->
-<div class="card">
-  <h2>🎛 Klangeinstellungen</h2>
-  <div class="btn-row" style="margin-bottom:.9rem">
-    <button class="btn-secondary" onclick="setPreset('robot')">🤖 Robotisch</button>
-    <button class="btn-secondary" onclick="setPreset('melodic')">🎵 Melodisch</button>
+<!-- ══ Hauptseite ══════════════════════════════════════════ -->
+<div id="page-main" class="page-wrap">
+
+  <div class="page-header">
+    <h1>⚙ <span>Gibberlink</span></h1>
+    <p class="sub">Eine erfundene Sprache — Deutsch &amp; Englisch als Eingangssprachen, SOV-Satzstellung, eigene Phonotaktik.</p>
   </div>
-  <div class="slider-row">
-    <div class="slider-item">
-      <label>Tempo <span id="lbl-tempo">1.0×</span></label>
-      <input type="range" id="sl-tempo" min="0.3" max="2.5" step="0.1" value="1.0"
-        oninput="document.getElementById('lbl-tempo').textContent=parseFloat(this.value).toFixed(1)+'×'">
+
+  <!-- DE/EN → GL -->
+  <div class="card">
+    <h2>🔤 Deutsch / Englisch → Gibberlink</h2>
+    <textarea id="input" placeholder="Satz eingeben… z.B. &quot;I love you&quot; oder &quot;Ich liebe dich&quot;"></textarea>
+    <div class="btn-row">
+      <button class="btn-primary"   onclick="doTranslate()">Übersetzen</button>
+      <button class="btn-play"      onclick="doPlay()">▶ Anhören</button>
+      <button class="btn-dl"        onclick="doDownload()">⬇ WAV</button>
+      <button class="btn-secondary" onclick="doClear()">Löschen</button>
+      <button id="btn-mic" class="btn-secondary" onclick="toggleSpeech()" title="Spracheingabe (iOS: Safari empfohlen)">🎤</button>
     </div>
-    <div class="slider-item">
-      <label>Vibrato <span id="lbl-vibrato">0 Hz</span></label>
-      <input type="range" id="sl-vibrato" min="0" max="25" step="1" value="0"
-        oninput="document.getElementById('lbl-vibrato').textContent=this.value+' Hz'">
+    <div class="result" id="output" style="margin-top:.8rem">—</div>
+    <div class="info" id="info"></div>
+  </div>
+
+  <!-- GL → DE/EN -->
+  <div class="card">
+    <h2>🔁 Gibberlink → Rückübersetzung</h2>
+    <textarea id="rev-input" placeholder="Gibberlink-Text eingeben… z.B. &quot;ke du glitive&quot;"></textarea>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="doReverse()">Zurückübersetzen</button>
+      <button class="btn-play"    onclick="doPlayRev()">▶ Anhören</button>
+      <button id="btn-lang" class="btn-secondary" onclick="toggleRevLang()" style="margin-left:auto">🇩🇪 DE</button>
     </div>
-    <div class="slider-item">
-      <label>Portamento <span id="lbl-porta">0 ms</span></label>
-      <input type="range" id="sl-porta" min="0" max="150" step="5" value="0"
-        oninput="document.getElementById('lbl-porta').textContent=this.value+' ms'">
+    <div class="result reverse" id="rev-output" style="margin-top:.8rem">—</div>
+  </div>
+
+  <!-- WAV Decoder -->
+  <div class="card">
+    <h2>🔊 WAV → Gibberlink dekodieren</h2>
+    <p style="font-size:.8rem;color:#8b949e;margin-bottom:.8rem;line-height:1.6">Lade eine Gibberlink-WAV-Datei (erzeugt mit dem ⬇ WAV Button) hoch. Der Frequenzanalysator erkennt die Sinustöne und übersetzt sie zurück.</p>
+    <input type="file" id="wav-file" accept=".wav,audio/*" style="display:none" onchange="decodeWav(this)">
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="document.getElementById('wav-file').click()">📂 WAV-Datei öffnen</button>
     </div>
-    <div class="slider-item">
-      <label>Klangfarbe <span id="lbl-timbre">Sinus</span></label>
-      <input type="range" id="sl-timbre" min="0" max="1" step="0.05" value="0"
-        oninput="document.getElementById('lbl-timbre').textContent=this.value<0.2?'Sinus':this.value<0.6?'Weich':'Warm'">
+    <div style="margin-top:.8rem">
+      <div style="font-size:.72rem;color:#484f58;margin-bottom:.4rem" id="wav-status">Noch keine Datei geladen.</div>
+      <div class="result" id="wav-gl" style="margin-bottom:.5rem">—</div>
+      <div style="font-size:.75rem;color:#8b949e;margin-bottom:.3rem">Rückübersetzung:</div>
+      <div class="result reverse" id="wav-de">—</div>
     </div>
   </div>
-</div>
 
-<!-- DE/EN → GL -->
-<div class="card">
-  <h2>🔤 Deutsch / Englisch → Gibberlink</h2>
-  <textarea id="input" placeholder="Satz eingeben… z.B. &quot;I love you&quot; oder &quot;Ich liebe dich&quot;"></textarea>
-  <div class="btn-row">
-    <button class="btn-primary" onclick="doTranslate()">Übersetzen</button>
-    <button class="btn-play"    onclick="doPlay()">▶ Anhören</button>
-    <button class="btn-dl"      onclick="doDownload()">⬇ WAV</button>
-    <button class="btn-secondary" onclick="doClear()">Löschen</button>
-    <button id="btn-mic" class="btn-secondary" onclick="toggleSpeech()" title="Spracheingabe (iOS: Safari empfohlen)">🎤</button>
+  <!-- Gibberlink Live -->
+  <div class="card">
+    <h2>🔊 Gibberlink Live — Senden &amp; Empfangen</h2>
+    <p style="font-size:.8rem;color:#8b949e;margin-bottom:.9rem;line-height:1.6">Spiele den GL-Klang über den Lautsprecher — ein anderes Gerät in der Nähe erkennt die Töne und übersetzt zurück. <span style="color:#484f58">Ruhige Umgebung empfohlen. HTTPS für Empfangen nötig.</span></p>
+    <div class="btn-row">
+      <button class="btn-play" onclick="doPhonSend()">🔊 Senden</button>
+      <button id="btn-phon-recv" class="btn-secondary" onclick="togglePhonReceive()">🎙 Empfangen</button>
+    </div>
+    <div class="info" id="phon-status" style="margin-top:.6rem;font-size:.78rem;color:#8b949e"></div>
+    <div id="phon-recv-panel" style="display:none;margin-top:.8rem">
+      <div style="font-size:.75rem;color:#8b949e;margin-bottom:.3rem">Empfangen (GL):</div>
+      <div class="result" id="phon-gl">—</div>
+      <div style="font-size:.75rem;color:#8b949e;margin:.5rem 0 .3rem">Rückübersetzung:</div>
+      <div class="result reverse" id="phon-de">—</div>
+    </div>
   </div>
-  <div class="result" id="output" style="margin-top:.8rem">—</div>
-  <div class="info" id="info"></div>
-</div>
 
-<!-- GL → DE/EN -->
-<div class="card">
-  <h2>🔁 Gibberlink → Rückübersetzung</h2>
-  <textarea id="rev-input" placeholder="Gibberlink-Text eingeben… z.B. &quot;ke du glitive&quot;"></textarea>
-  <div class="btn-row">
-    <button class="btn-primary" onclick="doReverse()">Zurückübersetzen</button>
-    <button class="btn-play"    onclick="doPlayRev()">▶ Anhören</button>
-    <button id="btn-lang" class="btn-secondary" onclick="toggleRevLang()" style="margin-left:auto">🇩🇪 DE</button>
+  <!-- GGwave -->
+  <div class="card">
+    <h2>📡 GGwave Live-Übertragung</h2>
+    <p style="font-size:.8rem;color:#8b949e;margin-bottom:.9rem;line-height:1.6">Sende den GL-Text als robustes Audio-Signal (Lautsprecher) oder empfange ihn live per Mikrofon — auch Gerät↔Gerät möglich. <span style="color:#484f58">Empfangen benötigt HTTPS.</span></p>
+    <div class="btn-row">
+      <button class="btn-play" onclick="doGGSend()">📡 Senden</button>
+      <button id="btn-recv" class="btn-secondary" onclick="toggleReceive()">🎙 Empfangen</button>
+    </div>
+    <div style="margin-top:.6rem;display:flex;align-items:center;gap:.6rem;font-size:.78rem;color:#8b949e">
+      <label for="gg-boost">Lautstärke:</label>
+      <input type="range" id="gg-boost" min="1" max="4" step="0.5" value="2"
+        style="flex:1;accent-color:#58a6ff"
+        oninput="document.getElementById('gg-boost-val').textContent=Math.round(20*Math.log10(+this.value))+'&nbsp;dB'">
+      <span id="gg-boost-val">+6&nbsp;dB</span>
+    </div>
+    <div class="info" id="gg-status" style="margin-top:.4rem;font-size:.78rem;color:#8b949e">GGwave wird geladen…</div>
+    <div id="gg-recv-panel" style="display:none;margin-top:.8rem">
+      <div style="font-size:.75rem;color:#8b949e;margin-bottom:.3rem">Empfangen (GL):</div>
+      <div class="result" id="gg-gl">—</div>
+      <div style="font-size:.75rem;color:#8b949e;margin:.5rem 0 .3rem">Rückübersetzung:</div>
+      <div class="result reverse" id="gg-de">—</div>
+    </div>
   </div>
-  <div class="result reverse" id="rev-output" style="margin-top:.8rem">—</div>
-</div>
 
-<!-- Wörterbuch -->
-<div class="card">
-  <h2>📖 Kurzreferenz</h2>
-  <div id="dict-preview" style="font-size:.78rem;line-height:1.9;column-count:2;column-gap:1.5rem"></div>
-</div>
+  <footer class="page-footer">Gibberlink v0.1 · SOV · 177 Wörter · DE+EN · GGwave</footer>
 
-<!-- WAV Decoder -->
-<div class="card">
-  <h2>🔊 WAV importieren → Gibberlink dekodieren</h2>
-  <p style="font-size:.8rem;color:#8b949e;margin-bottom:.8rem;line-height:1.6">Lade eine Gibberlink-WAV-Datei (erzeugt mit dem ⬇ WAV Button) hoch. Der Frequenzanalysator erkennt die Sinustöne und übersetzt sie zurück.</p>
-  <input type="file" id="wav-file" accept=".wav,audio/*" style="display:none" onchange="decodeWav(this)">
-  <div class="btn-row">
-    <button class="btn-secondary" onclick="document.getElementById('wav-file').click()">📂 WAV-Datei öffnen</button>
-  </div>
-  <div style="margin-top:.8rem">
-    <div style="font-size:.72rem;color:#484f58;margin-bottom:.4rem" id="wav-status">Noch keine Datei geladen.</div>
-    <div class="result" id="wav-gl" style="margin-bottom:.5rem">—</div>
-    <div style="font-size:.75rem;color:#8b949e;margin-bottom:.3rem">Rückübersetzung:</div>
-    <div class="result reverse" id="wav-de">—</div>
-  </div>
-</div>
+</div><!-- /page-main -->
 
-<!-- Phonem Live -->
-<div class="card">
-  <h2>🔊 Gibberlink Live — Senden & Empfangen</h2>
-  <p style="font-size:.8rem;color:#8b949e;margin-bottom:.9rem;line-height:1.6">Spiele den GL-Klang über den Lautsprecher — ein anderes Gerät in der Nähe erkennt die Töne und übersetzt zurück. <span style="color:#484f58">Ruhige Umgebung empfohlen. HTTPS für Empfangen nötig.</span></p>
-  <div class="btn-row">
-    <button class="btn-play" onclick="doPhonSend()">🔊 Senden</button>
-    <button id="btn-phon-recv" class="btn-secondary" onclick="togglePhonReceive()">🎙 Empfangen</button>
-  </div>
-  <div class="info" id="phon-status" style="margin-top:.6rem;font-size:.78rem;color:#8b949e"></div>
-  <div id="phon-recv-panel" style="display:none;margin-top:.8rem">
-    <div style="font-size:.75rem;color:#8b949e;margin-bottom:.3rem">Empfangen (GL):</div>
-    <div class="result" id="phon-gl">—</div>
-    <div style="font-size:.75rem;color:#8b949e;margin:.5rem 0 .3rem">Rückübersetzung:</div>
-    <div class="result reverse" id="phon-de">—</div>
-  </div>
-</div>
+<!-- ══ Einstellungen ════════════════════════════════════════ -->
+<div id="page-settings" class="page-wrap" style="display:none">
 
-<!-- GGwave -->
-<div class="card">
-  <h2>📡 GGwave Live-Übertragung</h2>
-  <p style="font-size:.8rem;color:#8b949e;margin-bottom:.9rem;line-height:1.6">Sende den GL-Text als robustes Audio-Signal (Lautsprecher) oder empfange ihn live per Mikrofon — auch Gerät↔Gerät möglich. <span style="color:#484f58">Empfangen benötigt HTTPS.</span></p>
-  <div class="btn-row">
-    <button class="btn-play" onclick="doGGSend()">📡 Senden</button>
-    <button id="btn-recv" class="btn-secondary" onclick="toggleReceive()">🎙 Empfangen</button>
+  <!-- Klangeinstellungen -->
+  <div class="card">
+    <h2>🎛 Klangeinstellungen</h2>
+    <div class="btn-row" style="margin-bottom:.9rem">
+      <button class="btn-secondary" onclick="setPreset('robot')">🤖 Robotisch</button>
+      <button class="btn-secondary" onclick="setPreset('melodic')">🎵 Melodisch</button>
+    </div>
+    <div class="slider-row">
+      <div class="slider-item">
+        <label>Tempo <span id="lbl-tempo">1.0×</span></label>
+        <input type="range" id="sl-tempo" min="0.3" max="2.5" step="0.1" value="1.0"
+          oninput="document.getElementById('lbl-tempo').textContent=parseFloat(this.value).toFixed(1)+'×'">
+      </div>
+      <div class="slider-item">
+        <label>Vibrato <span id="lbl-vibrato">0 Hz</span></label>
+        <input type="range" id="sl-vibrato" min="0" max="25" step="1" value="0"
+          oninput="document.getElementById('lbl-vibrato').textContent=this.value+' Hz'">
+      </div>
+      <div class="slider-item">
+        <label>Portamento <span id="lbl-porta">0 ms</span></label>
+        <input type="range" id="sl-porta" min="0" max="150" step="5" value="0"
+          oninput="document.getElementById('lbl-porta').textContent=this.value+' ms'">
+      </div>
+      <div class="slider-item">
+        <label>Klangfarbe <span id="lbl-timbre">Sinus</span></label>
+        <input type="range" id="sl-timbre" min="0" max="1" step="0.05" value="0"
+          oninput="document.getElementById('lbl-timbre').textContent=this.value<0.2?'Sinus':this.value<0.6?'Weich':'Warm'">
+      </div>
+    </div>
   </div>
-  <div style="margin-top:.6rem;display:flex;align-items:center;gap:.6rem;font-size:.78rem;color:#8b949e">
-    <label for="gg-boost">Lautstärke:</label>
-    <input type="range" id="gg-boost" min="1" max="4" step="0.5" value="2"
-      style="flex:1;accent-color:#58a6ff"
-      oninput="document.getElementById('gg-boost-val').textContent=Math.round(20*Math.log10(+this.value))+'&nbsp;dB'">
-    <span id="gg-boost-val">+6&nbsp;dB</span>
-  </div>
-  <div class="info" id="gg-status" style="margin-top:.4rem;font-size:.78rem;color:#8b949e">GGwave wird geladen…</div>
-  <div id="gg-recv-panel" style="display:none;margin-top:.8rem">
-    <div style="font-size:.75rem;color:#8b949e;margin-bottom:.3rem">Empfangen (GL):</div>
-    <div class="result" id="gg-gl">—</div>
-    <div style="font-size:.75rem;color:#8b949e;margin:.5rem 0 .3rem">Rückübersetzung:</div>
-    <div class="result reverse" id="gg-de">—</div>
-  </div>
-</div>
 
-<hr class="divider">
-<footer>Gibberlink v0.1 · SOV · 177 Wörter · DE+EN · GGwave</footer>
+  <!-- Kurzreferenz -->
+  <div class="card">
+    <h2>📖 Kurzreferenz</h2>
+    <div id="dict-preview" style="font-size:.78rem;line-height:1.9;column-count:2;column-gap:1.5rem"></div>
+  </div>
+
+</div><!-- /page-settings -->
 
 <script>
 // ═══════════════════════════════════════════════════════════
@@ -1010,6 +1064,14 @@ function updatePhonDisplay(){
   const gl=_phonText.trim();
   document.getElementById('phon-gl').textContent=gl||'—';
   document.getElementById('phon-de').textContent=gl?reverseTranslate(gl):'—';
+}
+
+// Seitennavigation
+function showPage(name){
+  ['main','settings'].forEach(p=>{
+    document.getElementById('page-'+p).style.display = p===name ? '' : 'none';
+    document.getElementById('tab-'+p).classList.toggle('tab-active', p===name);
+  });
 }
 
 // Enter-Shortcut
