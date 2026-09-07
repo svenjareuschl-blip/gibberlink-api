@@ -285,7 +285,11 @@ async function loadCommunityDict() {
     });
   } catch(e) {}
 }
-loadCommunityDict();
+loadCommunityDict().then(()=>{
+  const total=new Set([...Object.keys(DICT),...Object.keys(COMMUNITY_DICT)]).size;
+  const f=document.querySelector('.page-footer');
+  if(f) f.textContent=`Gibberlink v0.1 · SOV · ${total} Wörter · DE+EN · GGwave`;
+});
 
 // Fallback: deterministisches Pseudowort aus Zeichencodes (offline)
 function fallbackWord(tok) {
