@@ -435,7 +435,11 @@ const DUR_V_L=0.15, DUR_C_L=0.10, DUR_GAP_L=0.30;
 const LFO_RATE=5.5; // Hz — Vibrato-Geschwindigkeit
 
 let _ctx=null;
-function getCtx(){ if(!_ctx) _ctx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:48000}); return _ctx; }
+function getCtx(){
+  if(!_ctx||_ctx.state==='closed')
+    _ctx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:48000});
+  return _ctx;
+}
 
 function setSlider(id, val, lblId, fmt){
   const el=document.getElementById(id); el.value=val;
@@ -465,6 +469,7 @@ function sliders(){
 }
 
 async function playGl(glText){
+  try{
   const ctx=getCtx();
   if(ctx.state!=='running') await ctx.resume();
   const {tempo,vibrato,porta,timbre}=sliders();
@@ -530,6 +535,7 @@ async function playGl(glText){
     osc2.start(t); osc2.stop(t+dur);
     t+=dur;
   });
+  }catch(e){ console.error('playGl:', e); }
 }
 
 // Live-Phonem Senden: klare Sinustöne, Vokale im 2000-2600 Hz Bereich
@@ -646,8 +652,8 @@ async function doTranslate(){
   document.getElementById('info').textContent=info;
 }
 
-function doPlay(){ if(_lastGl) playGl(_lastGl); }
-function doPlayRev(){ if(_lastRevGl) playGl(_lastRevGl); }
+function doPlay(){ if(!_lastGl) return; getCtx().resume(); playGl(_lastGl); }
+function doPlayRev(){ if(!_lastRevGl) return; getCtx().resume(); playGl(_lastRevGl); }
 
 function doDownload(){
   if(!_lastGl) return;
